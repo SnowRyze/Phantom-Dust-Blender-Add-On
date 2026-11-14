@@ -19,6 +19,7 @@ H_OBJECTS = 0x90         # OB00, 0x38-byte entries
 H_COLLISION = 0x94
 H_EF00 = 0x98
 H_SP00 = 0x9C
+H_FILE_SIZE = 0x138      # equals the file size in every arena
 
 
 def header(b):

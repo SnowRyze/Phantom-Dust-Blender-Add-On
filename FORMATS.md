@@ -35,6 +35,8 @@ Section offsets point just past a 4-character tag (e.g. `NM00`).
 | `0x94` | **Collision** (below) |
 | `0x98` | `EF00` (unknown, likely effects) |
 | `0x9C` | `SP00` (unknown) |
+| `0xA0` .. `0xF4` | `MD00`, then the `CP00` spawn layouts and later sections |
+| `0x138` | File size (true in every arena) |
 
 Online, the host picks the layout as `rand() % count` and sends it to the other players.
 
@@ -97,6 +99,12 @@ u32 0
 
 Chunks are small (1-11 triangles). The game builds its spatial grid (30 x 20 x 30 cells) and tree at load
 time from these records, so a writer only needs the records.
+
+**Replacing collision without resizing (confirmed):** append the new block (records plus the `0xFF` end
+byte) at the end of the file, set header `0x94` to its offset and `0x138` to the new file size. The old block
+stays in place unused, so no other offset changes. Tested on st04 with a lowered copy appended: players sank
+into the floor, and the file grew by 111 KB with no load problems. (Growing the block in place would instead
+shift `EF00`, `SP00`, `MD00`, the `CP00` layouts and about half the object-table offsets.)
 
 Every battle arena parses with no out-of-range index, every normal unit length and matching its winding
 (about 1,200 to 9,300 triangles per arena).

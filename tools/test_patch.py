@@ -4,6 +4,8 @@
   python tools/test_patch.py spawns-up        <in.dat> <out.dat> [dy]    spawns raised (default 250)
   python tools/test_patch.py spawns-flip      <in.dat> <out.dat>         spawns turned 180 degrees
   python tools/test_patch.py collision-shift  <in.dat> <out.dat> [dy]    all collision moved (default -15)
+  python tools/test_patch.py collision-append <in.dat> <out.dat> [dy]    copy collision to the end of the
+        file, move only the copy (default -15), repoint header 0x94 and the file size at 0x138
 
 To try one in game: back up the arena's stNN.dat, copy the output over it, play that arena,
 then restore the backup.
@@ -33,9 +35,20 @@ if cmd in ('orbs-stack', 'spawns-up', 'spawns-flip'):
             dat.write_spawn(b, s)
             n += 1
     print(cmd, 'changed', n, 'spawn entries')
-elif cmd == 'collision-shift':
+elif cmd in ('collision-shift', 'collision-append'):
     dy = -15.0 if arg is None else arg
     recs, _ = dat.collision(b)
+    if cmd == 'collision-append':
+        start = recs[0].offset
+        end = recs[-1].offset + recs[-1].size + 0xC + 1      # include the 0xFF end marker
+        assert b[end - 1] == 0xFF
+        b += b'\0' * (-len(b) % 4)
+        new = len(b)
+        b += b[start:end]
+        struct.pack_into('<I', b, dat.H_COLLISION, new)
+        struct.pack_into('<I', b, dat.H_FILE_SIZE, len(b))
+        print('collision copied from %#x-%#x to %#x; file size %#x' % (start, end, new, len(b)))
+        recs, _ = dat.collision(b)                            # now the copy
     for r in recs:
         o = r.offset
         if r.kind == dat.KIND_VERTS:
