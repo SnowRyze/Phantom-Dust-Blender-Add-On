@@ -100,6 +100,15 @@ u32 0
 Chunks are small (1-11 triangles). The game builds its spatial grid (30 x 20 x 30 cells) and tree at load
 time from these records, so a writer only needs the records.
 
+**Chunk centre and radius:** the centre is the smallest sphere enclosing the chunk's vertices (matches every
+chunk in st04 and st32 to 0.003); the radius is the farthest vertex from that centre; the bounding box is the
+exact min/max of the vertices.
+
+**Writing collision (confirmed):** `pdstage/collision_build.py` builds the block from any triangles. Rebuilding
+each of the 21 arenas from its own triangles gives back the same triangles, surface types and normals (chunking
+differs, which the game handles). In game, st04 with its collision fully rebuilt by the writer plus a 40 x 40 x 25
+box at every first orb point played normally, and the boxes were solid.
+
 **Replacing collision without resizing (confirmed):** append the new block (records plus the `0xFF` end
 byte) at the end of the file, set header `0x94` to its offset and `0x138` to the new file size. The old block
 stays in place unused, so no other offset changes. Tested on st04 with a lowered copy appended: players sank
@@ -112,7 +121,9 @@ Every battle arena parses with no out-of-range index, every normal unit length a
 Surface types seen: st04 uses `02`, `07` (slopes and stairs), `08` (most floors and walls), `12`, and `21` on
 the vertex list. Other arenas use other values. Copy an existing arena's values until they are understood.
 
-## `com\stNN\comdata*.cad`: AI navigation data (likely)
+## `com\stNN\comdata*.cad`: AI navigation data (likely; on hold)
+
+On hold: custom arenas are not expected to need bots.
 
 The game loads `com\st%02d\comdata%d.cad` and `camdata.cam`. Two formats exist:
 

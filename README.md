@@ -8,8 +8,8 @@ itself is not written yet. See [FORMATS.md](FORMATS.md) for what is decoded and 
 | Part | Status |
 |---|---|
 | Spawns and orbs (`stNN.dat`, `CP00`) | Decoded, confirmed in game |
-| Collision (`stNN.dat`) | Decoded, confirmed in game |
-| AI navigation (`comdataN.cad`) | Arena format not decoded (st01's small format is) |
+| Collision (`stNN.dat`) | Decoded; writer confirmed in game |
+| AI navigation (`comdataN.cad`) | On hold (custom arenas aren't expected to need bots) |
 | Visual stage (`stNN.alr`) | Readable; writing not done |
 | Blender add-on | Not started |
 
@@ -29,6 +29,7 @@ python tools/collision_obj.py Map/st04.dat st04_col.obj   collision to OBJ (impo
 python tools/render_stage.py  Map/st04.dat st04.png       picture of collision, spawns and orbs
 python tools/dump_cad.py      com/st01/comdata.cad nav.obj   (st01's small format only)
 python tools/dump_alr.py      Map/st04.alr --root 0
+python tools/build_collision.py Map/st04.dat out.dat --obj mesh.obj [--keep]   new collision (writes a new file)
 python tools/test_patch.py    ...                         the in-game test edits (writes a new file)
 ```
 
