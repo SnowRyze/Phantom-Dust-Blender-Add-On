@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "phantom_dust_stage"
-version = "0.1.0"
+version = "1.0.0"
 name = "Phantom Dust Stage"
 tagline = "Build Phantom Dust arenas and export them to the game"
 maintainer = "SnowRyze"
