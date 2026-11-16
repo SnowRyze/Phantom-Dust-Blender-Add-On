@@ -12,7 +12,7 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
 from . import convert as cv
-from . import exporter, importer
+from . import exporter, importer, scene_tools
 from ._lib import effects_build, objects_build
 
 PRESET_ITEMS = [(k, k.replace('_', ' ').title(), v[2]) for k, v in objects_build.PRESETS.items()]
@@ -90,6 +90,11 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
         name='Character shadows', default=True,
         description='Add the shadow mesh the game needs for characters to cast shadows (a tiny hidden box; '
                     'the stage itself casts no shadows yet)')
+    install_to_game: BoolProperty(
+        name='Install into the game', default=False,
+        description='Also copy the exported files over the arena in the game data folder, so it is playable '
+                    'right away. The game\'s own files are backed up first (Map\\pd_addon_backup); '
+                    'Restore Original Arena puts them back')
 
     def invoke(self, context, event):
         self.base_arena = context.scene.pd_base_arena
@@ -106,8 +111,12 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
         if not game_data:
             self.report({'ERROR'}, 'Set the game data folder (Assets\\Data) in the export options or add-on preferences')
             return {'CANCELLED'}
+        game_map = os.path.normcase(os.path.abspath(os.path.join(game_data, 'Map')))
+        if os.path.normcase(os.path.dirname(os.path.abspath(self.filepath))) == game_map:
+            self.report({'ERROR'}, 'Export to another folder; tick "Install into the game" to put the map in the game')
+            return {'CANCELLED'}
         try:
-            base_alr = os.path.join(game_data, 'Map', self.base_arena + '.alr')
+            base_alr = exporter.base_alr_path(game_data, self.base_arena)
             out_alr = os.path.splitext(self.filepath)[0] + '.alr'
             vmsg, objects, placements = exporter.export_models(context, base_alr, out_alr, self.scale,
                                                                self.background_and_sky, self.shadows)
@@ -116,7 +125,10 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
                                         game_data)
             if vmsg:
                 msg += '; ' + vmsg + ' -> ' + os.path.basename(out_alr)
-        except exporter.ExportError as e:
+            if self.install_to_game:
+                done = exporter.install(game_data, self.base_arena, self.filepath, out_alr if vmsg else None)
+                msg += '; installed into the game as %s' % ', '.join(os.path.basename(p) for p in done)
+        except (exporter.ExportError, OSError) as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
         context.scene.pd_base_arena = self.base_arena
@@ -215,7 +227,8 @@ def menu_export(self, context):
     self.layout.operator(PDSTAGE_OT_export.bl_idname, text='Phantom Dust Stage (.dat)')
 
 
-classes = (PDSTAGE_Preferences, PDSTAGE_OT_import, PDSTAGE_OT_export, PDSTAGE_PT_collection, PDSTAGE_PT_lighting)
+classes = (PDSTAGE_Preferences, PDSTAGE_OT_import, PDSTAGE_OT_export, PDSTAGE_PT_collection, PDSTAGE_PT_lighting) \
+    + scene_tools.classes
 
 
 def _colour(name, default, desc):

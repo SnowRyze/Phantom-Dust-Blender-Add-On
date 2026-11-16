@@ -30,8 +30,55 @@ def collections_with_role(scene, role):
     return [c for c in scene.collection.children_recursive if getattr(c, 'pd_role', 'NONE') == role]
 
 
+BACKUP_DIR = 'pd_addon_backup'       # inside Assets\Data\Map: the game's own files, saved before an install
+
+
+def original_path(game_data, filename):
+    """The game's own copy of Map\\filename: the add-on's backup if a map was installed over it."""
+    backup = os.path.join(game_data, 'Map', BACKUP_DIR, filename)
+    return backup if os.path.isfile(backup) else os.path.join(game_data, 'Map', filename)
+
+
 def base_dat_path(game_data, arena):
-    return os.path.join(game_data, 'Map', arena + '.dat')
+    return original_path(game_data, arena + '.dat')
+
+
+def base_alr_path(game_data, arena):
+    return original_path(game_data, arena + '.alr')
+
+
+def install(game_data, arena, dat_path, alr_path):
+    """Copy an exported map over the game's arena files, backing up the originals once.
+    Returns the files written."""
+    import shutil
+    mdir = os.path.join(game_data, 'Map')
+    bdir = os.path.join(mdir, BACKUP_DIR)
+    os.makedirs(bdir, exist_ok=True)
+    done = []
+    for src, name in ((dat_path, arena + '.dat'), (alr_path, arena + '.alr')):
+        if src is None:                       # nothing new for this file: the game's own one belongs there
+            src = os.path.join(bdir, name)
+            if not os.path.isfile(src):
+                continue
+        dst = os.path.join(mdir, name)
+        if not os.path.isfile(os.path.join(bdir, name)):
+            shutil.copy2(dst, os.path.join(bdir, name))
+        shutil.copyfile(src, dst)
+        done.append(dst)
+    return done
+
+
+def restore(game_data, arena):
+    """Put the game's own arena files back from the backup. Returns the files restored."""
+    import shutil
+    mdir = os.path.join(game_data, 'Map')
+    done = []
+    for name in (arena + '.dat', arena + '.alr'):
+        b = os.path.join(mdir, BACKUP_DIR, name)
+        if os.path.isfile(b):
+            shutil.copyfile(b, os.path.join(mdir, name))
+            done.append(name)
+    return done
 
 
 def _spawn_objects(layout_coll):

@@ -26,7 +26,8 @@ def gather(context, eff_colls, scale, game_data):
             preset = getattr(tc, 'pd_effect', 'STEAM')
             arena, index, _label = effects_build.PRESETS[preset]
             if arena not in cache:
-                path = os.path.join(game_data, 'Map', arena + '.dat')
+                from .exporter import original_path       # the game's own file, even if a map replaced it
+                path = original_path(game_data, arena + '.dat')
                 if not os.path.isfile(path):
                     raise EffectsError('effect preset %s needs %s from the game' % (preset, path))
                 cache[arena] = open(path, 'rb').read()
