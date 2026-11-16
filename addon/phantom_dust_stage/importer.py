@@ -93,4 +93,5 @@ def import_stage(context, path, scale=cv.DEFAULT_SCALE, collision=True, spawns=T
     if stage in dict(cv.ARENAS):
         context.scene.pd_base_arena = stage
     context.scene.pd_scale = scale
+    context.scene.pd_imported = True
     return root, '; '.join(report)

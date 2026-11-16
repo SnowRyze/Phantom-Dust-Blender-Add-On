@@ -95,37 +95,54 @@ def gather_collision(context, col_colls, scale):
     return tris
 
 
-def export_visuals(context, base_alr_path, out_alr_path, scale, background_and_sky=False, shadows=True):
-    """Write the .alr from Visuals collections. Returns a report string, or None without Visuals."""
+def export_models(context, base_alr_path, out_alr_path, scale, background_and_sky=False, shadows=True):
+    """Write the .alr from Visuals and Objects collections.
+
+    Returns (report string, objects, placements) for the .dat, or (None, None, None) when the scene has
+    neither Visuals nor Objects (the base model file is then not needed)."""
+    from . import objects_export as ox
     from . import visuals_export as vx
-    cols = collections_with_role(context.scene, 'VISUALS')
-    if not cols:
-        return None
+    scene = context.scene
+    vis_cols = collections_with_role(scene, 'VISUALS')
+    obj_cols = collections_with_role(scene, 'OBJECTS')
+    if not vis_cols and not obj_cols:
+        return None, None, None
     if not os.path.isfile(base_alr_path):
         raise ExportError('base arena model not found: %s' % base_alr_path)
     base = open(base_alr_path, 'rb').read()
+    textures = vx.Textures(vx.alr.textures(base))
+    report = []
     try:
-        replace, textures, stats = vx.gather(context, cols, scale, vx.alr.textures(base))
-    except vx.VisualsError as e:
+        replace, vstats = vx.gather(context, vis_cols, scale, textures) if vis_cols else ({}, dict(clamped_uv=0))
+        types, ostats = ox.gather(context, obj_cols, scale, textures) if obj_cols else ([], dict(clamped_uv=0))
+    except (vx.VisualsError, ox.ObjectsError) as e:
         raise ExportError(str(e))
     if not background_and_sky:
         replace = {k: v for k, v in replace.items() if k == 0}
-    if not replace:
+    if vis_cols and not replace:
         raise ExportError('the Visuals collection has no mesh triangles for the stage')
-    data, built = vx.alr_build.rebuild(base, replace=replace, textures=textures,
+    add_models = [m for t in types for m in t['models'] if m is not None]
+    data, built = vx.alr_build.rebuild(base, replace=replace, textures=textures.new, add_models=add_models,
                                        shadows_for=(0,) if shadows and 0 in replace else ())
     with open(out_alr_path, 'wb') as f:
         f.write(data)
-    written = sum(len(m['tris']) for ms in replace.values() for m in ms)
-    msg = 'model: %d triangles, %d new textures' % (written, stats['new_textures'])
-    if shadows and 0 in replace:
-        msg += ', character shadows on'
-    if stats['clamped_uv']:
-        msg += ' (%d UVs clamped: keep each triangle within 8 texture repeats)' % stats['clamped_uv']
-    return msg
+    if replace:
+        written = sum(len(m['tris']) for ms in replace.values() for m in ms)
+        report.append('model: %d triangles' % written + (', character shadows on' if shadows and 0 in replace else ''))
+    report.append('%d new textures' % len(textures.new))
+    objects = placements = None
+    if obj_cols:
+        objects, placements = ox.add_to_files(types, add_models, built['added_roots'])
+        report.append('%d object types, %d placed' % (len(objects), len(placements)))
+    clamped = vstats.get('clamped_uv', 0) + ostats.get('clamped_uv', 0)
+    if clamped:
+        report.append('%d UVs clamped: keep each triangle within 8 texture repeats' % clamped)
+    return '; '.join(report), objects, placements
 
 
-def export_scene(context, base_path, out_path, scale):
+def export_scene(context, base_path, out_path, scale, remove_objects=False, objects=None, placements=None):
+    """Write the .dat. remove_objects = clean slate (no placed objects or effects from the base arena).
+    objects/placements (from export_models) become the stage's objects."""
     if not os.path.isfile(base_path):
         raise ExportError('base arena file not found: %s (set the game data folder in the export options)' % base_path)
     if os.path.abspath(out_path) == os.path.abspath(base_path):
@@ -167,6 +184,14 @@ def export_scene(context, base_path, out_path, scale):
         report.append('%d collision triangles' % stats['triangles'] + (' (%d degenerate skipped)' % stats['skipped'] if stats['skipped'] else ''))
     else:
         report.append('no Colliders collection: kept the base collision')
+
+    if remove_objects:
+        n = dat.clear_placements(b)
+        m = dat.clear_effects(b)
+        report.append('clean slate: removed %d placed objects and %d effects of the base arena' % (n, m))
+    if objects:
+        from ._lib import objects_build
+        b = bytearray(objects_build.add_objects(bytes(b), objects, placements))
 
     with open(out_path, 'wb') as f:
         f.write(b)

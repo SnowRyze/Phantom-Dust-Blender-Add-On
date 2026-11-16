@@ -13,6 +13,9 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 
 from . import convert as cv
 from . import exporter, importer
+from ._lib import objects_build
+
+PRESET_ITEMS = [(k, k.replace('_', ' ').title(), v[2]) for k, v in objects_build.PRESETS.items()]
 
 ARENA_ITEMS = [(k, '%s (%s)' % (name, k), 'Replace %s' % name) for k, name in cv.ARENAS]
 
@@ -76,6 +79,11 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
         name='Replace background and sky', default=False,
         description='Also export Visuals child collections named Background/Sky (off: keep the arena\'s own, '
                     'including its animated sky)')
+    remove_objects: BoolProperty(
+        name='Clean slate', default=True,
+        description='Remove everything the replaced arena placed: its props and breakables (stairs, lockers, '
+                    'boxes...) and all its effects (lamps, falling rubble, floating debris...). Turn off only when '
+                    'editing an imported arena')
     shadows: BoolProperty(
         name='Character shadows', default=True,
         description='Add the shadow mesh the game needs for characters to cast shadows (a tiny hidden box; '
@@ -84,6 +92,8 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
     def invoke(self, context, event):
         self.base_arena = context.scene.pd_base_arena
         self.scale = context.scene.pd_scale
+        # Editing an imported arena keeps its objects; a map built from scratch drops them.
+        self.remove_objects = not context.scene.pd_imported
         if not self.game_data:
             self.game_data = _prefs_game_data(context)
         self.filepath = self.base_arena + '.dat'
@@ -95,12 +105,12 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
             self.report({'ERROR'}, 'Set the game data folder (Assets\\Data) in the export options or add-on preferences')
             return {'CANCELLED'}
         try:
-            msg = exporter.export_scene(context, exporter.base_dat_path(game_data, self.base_arena),
-                                        self.filepath, self.scale)
             base_alr = os.path.join(game_data, 'Map', self.base_arena + '.alr')
             out_alr = os.path.splitext(self.filepath)[0] + '.alr'
-            vmsg = exporter.export_visuals(context, base_alr, out_alr, self.scale, self.background_and_sky,
-                                           self.shadows)
+            vmsg, objects, placements = exporter.export_models(context, base_alr, out_alr, self.scale,
+                                                               self.background_and_sky, self.shadows)
+            msg = exporter.export_scene(context, exporter.base_dat_path(game_data, self.base_arena),
+                                        self.filepath, self.scale, self.remove_objects, objects, placements)
             if vmsg:
                 msg += '; ' + vmsg + ' -> ' + os.path.basename(out_alr)
         except exporter.ExportError as e:
@@ -121,13 +131,35 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
     def draw(self, context):
         c = context.collection
         lay = self.layout
+        parent = next((p for p in bpy.data.collections if c.name in p.children), None)
+        if parent is not None and parent.pd_role == 'OBJECTS':
+            lay.label(text='Object type (in %s)' % parent.name, icon='OBJECT_DATA')
+            lay.prop(c, 'pd_preset')
+            destructible = objects_build.PRESETS[c.pd_preset][0] == 2      # category 2 = breakable objects
+            if destructible:
+                lay.prop(c, 'pd_hits')
+                lay.prop(c, 'pd_damage')
+                lay.prop(c, 'pd_debris_stays')
+            lay.prop(c, 'pd_surface', text='Collider surface')
+            col = lay.column(align=True)
+            col.label(text='Meshes here = placements (linked duplicates of one mesh)')
+            col.label(text='Child collections: Broken (pieces), Debris, Collider' if destructible
+                      else 'Child collection: Collider (optional)')
+            if destructible:
+                box = lay.box()
+                box.label(text='Debris speed is set by the game, from mass:', icon='INFO')
+                box.label(text='lighter (smaller) pieces fly faster, heavier ones slower,')
+                box.label(text='up to a fixed limit. The game works mass out from the model.')
+            return
         lay.prop(c, 'pd_role')
         lay.prop(c, 'pd_surface')
         if c.pd_role == 'SPAWNS':
             lay.label(text='Child collections = layouts; spawn empties (+Y = facing) with 3 orb children')
         elif c.pd_role == 'VISUALS':
             lay.label(text='Texture from each material; baked lighting from the PD_Light colour attribute')
-        elif c.pd_role in ('MISC', 'BREAKABLES'):
+        elif c.pd_role == 'OBJECTS':
+            lay.label(text='Each child collection is one object type')
+        elif c.pd_role == 'MISC':
             lay.label(text='Not exported yet', icon='INFO')
 
 
@@ -148,8 +180,23 @@ def register():
     bpy.types.Collection.pd_surface = StringProperty(
         name='Surface type', default='',
         description='Collision surface type in hex (e.g. 08, the common floor/wall type). Empty = inherit from the parent collection')
+    bpy.types.Collection.pd_preset = EnumProperty(
+        name='Behaviour', items=PRESET_ITEMS, default='SOLID',
+        description='How objects of this type behave in game (the game\'s own object classes)')
+    bpy.types.Collection.pd_debris_stays = BoolProperty(
+        name='Debris stays', default=False,
+        description='Leave the debris model lying where the object broke (off: it disappears, like the game\'s boxes)')
+    bpy.types.Collection.pd_hits = bpy.props.IntProperty(
+        name='Hits to break', default=1, min=1, max=255,
+        description='How many hits the object takes before it breaks')
+    bpy.types.Collection.pd_damage = bpy.props.IntProperty(
+        name='Debris damage', default=2, min=0, max=255,
+        description='Damage a player takes when hit by this object\'s moving broken pieces or debris '
+                    '(the game\'s boxes use 2, benches 3). How fast debris moves is up to the game: it depends on '
+                    'the piece\'s mass (lighter = faster, with a fixed limit)')
     bpy.types.Scene.pd_base_arena = EnumProperty(name='Base arena', items=ARENA_ITEMS, default='st04')
     bpy.types.Scene.pd_scale = FloatProperty(name='Scale', default=cv.DEFAULT_SCALE, min=0.0001)
+    bpy.types.Scene.pd_imported = BoolProperty(name='Started from an imported arena', default=False)
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.TOPBAR_MT_file_import.append(menu_import)
@@ -161,7 +208,12 @@ def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_import)
     for c in reversed(classes):
         bpy.utils.unregister_class(c)
+    del bpy.types.Scene.pd_imported
     del bpy.types.Scene.pd_scale
     del bpy.types.Scene.pd_base_arena
+    del bpy.types.Collection.pd_damage
+    del bpy.types.Collection.pd_hits
+    del bpy.types.Collection.pd_debris_stays
+    del bpy.types.Collection.pd_preset
     del bpy.types.Collection.pd_surface
     del bpy.types.Collection.pd_role

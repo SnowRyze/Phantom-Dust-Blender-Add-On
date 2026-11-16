@@ -211,7 +211,15 @@ def shadow_meshes(tpl, meshes, mode='minimal'):
     return result
 
 
-def build_model(tpl, meshes, texture_base_index, rb_base):
+def node_record(t=(0, 0, 0), rot=(0, 0, 0), scale=(1, 1, 1), flags=0x0004, parent=None, values=(0, 0, 0, 0), node_id=0):
+    """One 64-byte node: transform, flags, id, parent (None = root), name (none) and four per-node values.
+    The game reads the values when an object breaks: in the original arenas a broken model's pieces have
+    (3, 0, 0, 0) and debris roots (2, 2) or (3, 3); stage models use zeros."""
+    return struct.pack('<9fHHHHI4f', *t, *rot, *scale, flags, node_id, 0, 0xFFFF if parent is None else parent,
+                       0xFFFFFFFF, *values)
+
+
+def build_model(tpl, meshes, texture_base_index, rb_base, nodes=None):
     """Chunk chain for one root plus its vertex data.
 
     meshes: list of dict(verts=[(pos, normal, uv) or (pos, normal, uv, (r, g, b, a))], tris=[(a, b, c)],
@@ -230,7 +238,7 @@ def build_model(tpl, meshes, texture_base_index, rb_base):
                 raw = bytearray(r['material'])
                 raw[0x12] = len(materials) & 0xFF
                 materials.append(bytes(raw))
-            parts.append((mat_index[key], r, r['tris']))
+            parts.append((mat_index[key], r, r['tris'], m.get('node', 0)))
             continue
         tex = m['texture_index'] if 'texture_index' in m else texture_base_index + m['texture']
         if tex not in mat_index:
@@ -240,11 +248,11 @@ def build_model(tpl, meshes, texture_base_index, rb_base):
             struct.pack_into('<4H', raw, 0x18, tex, 0, 0, 0)
             materials.append(bytes(raw))
         for verts, tris in split_mesh(m['verts'], m['tris']):
-            parts.append((mat_index[tex], verts, tris))
+            parts.append((mat_index[tex], verts, tris, m.get('node', 0)))
 
     vdata = bytearray()
     vb_entries, mesh_chunks = [], []
-    for i, (mi, verts, tris) in enumerate(parts):
+    for i, (mi, verts, tris, node_i) in enumerate(parts):
         pad = -(rb_base + len(vdata)) % ALIGN
         vdata += b'\0' * pad
         rel = rb_base + len(vdata)
@@ -277,7 +285,7 @@ def build_model(tpl, meshes, texture_base_index, rb_base):
         struct.pack_into('<3ff', hdr, 0x08, *centre, radius)
         struct.pack_into('<3f', hdr, 0x18, *(min(p[k] for p in pts) for k in range(3)))
         struct.pack_into('<3f', hdr, 0x24, *(max(p[k] for p in pts) for k in range(3)))
-        struct.pack_into('<4H', hdr, 0x40, mi, 0, i, 5)
+        struct.pack_into('<4H', hdr, 0x40, mi, node_i, i, 5)
         struct.pack_into('<3I', hdr, 0x48, min(idx), len(tris), len(idx))
         body = _pad(bytes(hdr[8:]) + struct.pack('<%dH' % len(idx), *idx), 4)
         mesh_chunks.append(struct.pack('<II', 0x02, 8 + len(body)) + body)
@@ -285,8 +293,13 @@ def build_model(tpl, meshes, texture_base_index, rb_base):
     chain = bytearray()
     unk = struct.unpack_from('<H', tpl['material_hdr'], 0x0A)[0]
     chain += struct.pack('<IIHH', 0x01, 12 + 0x4C * len(materials), len(materials), unk) + b''.join(materials)
-    node = struct.pack('<9fHHHHI16x', 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0xFFFF, 0xFFFFFFFF)
-    chain += struct.pack('<IIHHI', 0x03, 16 + len(node), 1, 0, 0) + node
+    if nodes is None:
+        node_bytes = struct.pack('<9fHHHHI16x', 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0xFFFF, 0xFFFFFFFF)
+        n_nodes = 1
+    else:
+        node_bytes = b''.join(node_record(node_id=k, **n) for k, n in enumerate(nodes))
+        n_nodes = len(nodes)
+    chain += struct.pack('<IIHHI', 0x03, 16 + len(node_bytes), n_nodes, 0, 0) + node_bytes
     chain += struct.pack('<III', 0x16, 12 + 0x1C * len(vb_entries), len(vb_entries)) + b''.join(vb_entries)
     chain += b''.join(mesh_chunks)
     chain += struct.pack('<III', 0x0D, 12, 0) + struct.pack('<II', 0x00, 8)
@@ -314,7 +327,7 @@ def raw_mesh(b, mesh, rb_off):
 
 # ---------------------------------------------------------------- the whole file
 
-def rebuild(b, replace=None, textures=(), clear=(), shadows_for=(), shadow_mode='minimal'):
+def rebuild(b, replace=None, textures=(), clear=(), shadows_for=(), shadow_mode='minimal', add_models=()):
     """New .alr bytes.
 
     replace:     {root index: list of meshes} (see build_model); texture indices refer to `textures`.
@@ -322,6 +335,8 @@ def rebuild(b, replace=None, textures=(), clear=(), shadows_for=(), shadow_mode=
     clear:       root indices to empty (e.g. remove the background).
     shadows_for: replaced roots that also get a shadow mesh made from their triangles (the stage, root 0,
                  needs one for characters to cast shadows).
+    add_models:  lists of meshes appended as new roots (e.g. object models, in local space); their root
+                 indices are len(original roots), len + 1, ... (returned in stats['added_roots']).
     With no arguments the result is byte-identical to the input."""
     replace = replace or {}
     h = alr.header(b)
@@ -329,7 +344,7 @@ def rebuild(b, replace=None, textures=(), clear=(), shadows_for=(), shadow_mode=
     t15 = struct.unpack_from('<3I', b, hsize)
     tex_entries = bytes(b[hsize + 0xC:hsize + 0xC + 0x1C * t15[2]])
     rb = bytearray(b[rb_off:rb_off + rb_size])
-    tpl = _templates(b) if (replace or textures) else None
+    tpl = _templates(b) if (replace or textures or add_models) else None
     stats = {}
 
     # new textures appended to the resource buffer and the table
@@ -360,11 +375,27 @@ def rebuild(b, replace=None, textures=(), clear=(), shadows_for=(), shadow_mode=
         else:
             c = alr.chain(b, r)
             chains.append(bytes(b[r:c[-1][0] + c[-1][2]]))
+    added = []
+    for model in add_models:
+        # a model is a list of meshes, or dict(meshes=[...], nodes=[node kwargs...]) with meshes using 'node'
+        ms, nodes = (model['meshes'], model.get('nodes')) if isinstance(model, dict) else (model, None)
+        chain, vdata, st = build_model(tpl, list(ms), t15[2], len(rb), nodes)
+        rb += vdata
+        added.append(len(chains))
+        chains.append(chain)
+    stats['added_roots'] = added
 
-    # metadata layout: header, texture table, chains in the original order of their offsets
-    order = sorted(range(len(h['roots'])), key=lambda i: h['roots'][i])
-    meta = bytearray(b[:hsize]) + tex_chunk
-    roots = [0] * len(h['roots'])
+    # metadata layout: header (with room for every root offset), texture table, then the original chains in
+    # the order of their offsets, then any added chains
+    n_roots = len(chains)
+    order = sorted(range(len(h['roots'])), key=lambda i: h['roots'][i]) + added
+    head = bytearray(b[:0x20]) + bytearray(4 * n_roots)
+    if not added:
+        head = bytearray(b[:hsize])                      # unchanged: keep the original header bytes exactly
+    struct.pack_into('<I', head, 0x04, len(head))
+    struct.pack_into('<I', head, 0x10, n_roots)
+    meta = head + tex_chunk
+    roots = [0] * n_roots
     for i in order:
         roots[i] = len(meta)
         meta += chains[i]

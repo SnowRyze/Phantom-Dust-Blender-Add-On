@@ -198,6 +198,44 @@ Tested on st04:
 - Shadow mesh = a **1-unit closed box 1000 units below the stage**: clean surfaces and character shadows work.
   The writer uses this by default; the stage then casts no shadows of its own.
 
+## Objects: props and breakables (confirmed in game)
+
+Read from `FUN_140203720` (object table) and `FUN_140203dc0` (creates placed objects), with names from Esper-RE
+`st00.h`. New objects written by `pdstage/objects_build.py` appear, block players and break in game.
+
+- **`NM00`** (header `0x5C`, count at `0x60`): object names, NUL-terminated (`st04_kaidanA_` = stairs).
+- **`OB00`** (header `0x90`): one `0x38`-byte entry per object:
+  `u32 model[3]` (`.alr` root index for the **intact**, **broken** and **debris** states, `FFFFFFFF` = none),
+  then 9 file offsets: `[6]` = the object's own **collision chain** (same record format as the stage collision,
+  in object-local space), `[9]` = its **effect block** (a small `EF00` table, e.g. a break burst); the others are
+  unused in arenas. The last two u32 are uninitialised (`cdcdcdcd`) except in the first entry.
+- **Placements** (header `0x04 + 4*slot`, counts at `0x30 + 4*slot`, section tags `PS00`/`PS01`): `0x24`-byte
+  entries `s32 object, u8 category, u8 type, u8, u8, u32 0, f32 pos[3], f32 rot[3]`. A match uses slot
+  `layout + 1`, else slot 0. Setting the counts to 0 removes every placed object (confirmed).
+- **category / type pick the object's class** through the factory table at `0x1402dc4f0`. Category 2 is the
+  destructible family: 1 `Rep01` (breaks, pieces scatter: boxes, chairs, handrails), 2 (cones, barricades),
+  3 `Rep03` (crumbles: desks, benches, fences), 7/8 breakable walls, 12/13 falling ceiling pieces, 18 breaks when
+  touched (glass railings), 48 crumbling pillars, and more. Category 4: 15 `ReadLim` ("genkai"/limit), **16 `Jump`**
+  (jump pads). Category 1: simple hittable props (type 4: lights). Category 3: hub-world doors and chairs.
+- **Object models** are small local-space `.alr` roots. The game reads **four per-node values** (bytes `0x30-0x3F`
+  of each 64-byte node, as floats) when an object breaks:
+  - broken models: each piece on its own node with `(3, 0, 0, 0)`. Tested: a broken model made of two such
+    pieces breaks into 2 in game; a single node with zeros makes the object vanish.
+  - debris roots: `(2, 2)` (boxes) made new debris disappear after breaking; zeros left it lying there.
+  - intact roots: zeros, or `(0, 3)` on desks and lockers (meaning not yet known).
+  Original nodes use flags `0x0004`.
+- **Read from the code** (`pdStageObjAHitCrash`, `pdStageObjARoll`, `FUN_1401ec350`/`FUN_1401ec800`):
+  - **Hits to break** = intact root node value 3 (object field `+0x4e`, minimum 1). Each hit lowers it; the hit that
+    finds it below 2 breaks the object. Confirmed in game (3 hits).
+  - **Damage on contact** = second value of the current model's root node: passed to the player when a moving
+    broken/debris object touches them (only if the value is non-zero). Not yet seen in game (debris barely moves).
+  - Breaking spawns the object's effect entries of kind 2 (its `EF00` effect block) at the hit, then launches the
+    next state's model as a physics body: speed = sqrt(1200 / max(mass, 200)) along the hit direction, plus a small
+    random upward kick, **capped at 1.5 units per frame**; mass comes from the model. A per-object scale exists in
+    the code but nothing in the files sets it. So debris speed/distance is fixed by the game.
+  - Object table offset slots per state (intact, broken, debris): `[3..5]` animation (`OA` sections, `.alr` 0x05
+    chunks; e.g. Spiral Highway's collapsing bridges), `[6..8]` collision (`OC`), `[9..11]` effects (`OE`).
+
 ## Not yet known
 
 - The `.alr` writer (needed for custom visuals) and how stage materials pick shaders.

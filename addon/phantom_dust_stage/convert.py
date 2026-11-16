@@ -29,8 +29,9 @@ ROLES = [
     ('SPAWNS', 'Spawn Points', 'Child collections are layouts; each holds spawn empties with 3 orb children'),
     ('VISUALS', 'Visuals', 'Visible meshes: replace the arena\'s stage model (child collections named '
                            'Background/Sky replace those, if enabled on export)'),
-    ('MISC', 'Misc (planned)', 'Cameras, kill height, skybox; not exported yet'),
-    ('BREAKABLES', 'Breakables (planned)', 'Not exported yet'),
+    ('OBJECTS', 'Objects', 'Props and breakables: each child collection is one object type (preset, debris, '
+                           'collider); every mesh directly in it is one placement'),
+    ('MISC', 'Misc (planned)', 'Kill height and the like; not exported yet'),
 ]
 
 

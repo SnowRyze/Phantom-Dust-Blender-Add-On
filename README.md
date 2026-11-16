@@ -67,10 +67,23 @@ of 4 spawns; make 1 or more layouts of 4 and they are repeated to fill the slots
 **Starting from an existing arena (optional):** File > Import > Phantom Dust Stage (.dat) loads an arena's
 collision and spawns into tagged collections, and sets the export to go back to the same slot. With
 **Visible model** on, it also loads `stNN.alr` from the same folder: the stage, background and sky with their
-textures, lined up with the collision, as a reference (it is not exported yet).
+textures, lined up with the collision, to use as a reference or to edit and export again.
 
-Character shadows work on exported stages ("Character shadows" export option, on by default). Not exported
-yet: shadows cast by the stage itself (e.g. under stairs), normal maps and reflections (new meshes use the simple
+**Objects (props and breakables):** an Objects collection holds one child collection per object type. In
+Collection Properties > Phantom Dust each type has a **Behaviour** preset (the game's own object classes: Solid,
+Break Scatter, Crumble, Break Touch, Wall, Ceiling, Pillar, Jump Pad...); destructible presets also have **Hits to
+break**, **Debris damage** and **Debris stays**. Every mesh directly in the type collection is one placement (linked duplicates of one mesh,
+turned about Z only, scale 1). Optional child collections: `Broken` (each mesh is one piece), `Debris`, `Collider`
+(default: a box around the model). Model them around the world origin.
+For destructible objects, debris speed is decided by the game, not the add-on: it comes from the piece's mass
+(lighter = faster), with a fixed limit, so debris only travels a short way.
+
+**Clean slate** (export option, on for maps built from scratch): the replaced arena's own objects and effects
+are removed, so only what you made appears.
+
+Character shadows work on exported stages ("Character shadows" export option, on by default).
+
+Not exported yet: shadows cast by the stage itself (e.g. under stairs), normal maps and reflections (new meshes use the simple
 `sd` shader), cameras, kill height, breakables, and adding more layouts than the base arena has.
 
 **Tests:** `tests/blender_roundtrip.py` runs in Blender without a window: an imported arena exports with

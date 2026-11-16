@@ -41,6 +41,83 @@ def section_tags(b):
     return [(m.start(), m.group().decode()) for m in re.finditer(rb'(?:NM|O[A-E]|EF|SP|MD|CP)00', b)]
 
 
+# ---------------------------------------------------------------- object placements (PS00/PS01...)
+
+PLACEMENT_SIZE = 0x24      # s32 object id, u8, u8, u16, u32, f32 pos[3], f32 rot[3] (Esper-RE st00.h)
+
+
+def placement_tables(b):
+    """The layout slots' object placement tables: list of (slot, offset, count)."""
+    out = []
+    for i in range(11):
+        off = struct.unpack_from('<I', b, H_LAYOUT_SLOTS + 4 * i)[0]
+        cnt = struct.unpack_from('<I', b, H_LAYOUT_COUNTS + 4 * i)[0]
+        if off != NONE and cnt != NONE:
+            out.append((i, off, cnt))
+    return out
+
+
+def clear_placements(buf):
+    """Remove the arena's placed objects (props, stairs, debris...) by setting every placement count to 0.
+    Returns how many placements were removed."""
+    n = 0
+    for i, _off, cnt in placement_tables(buf):
+        struct.pack_into('<I', buf, H_LAYOUT_COUNTS + 4 * i, 0)
+        n += cnt
+    return n
+
+
+# ---------------------------------------------------------------- effects (EF00 at header 0x98)
+
+EFFECT_SIZE = 0x5C         # u8 kind, u8, u8, u8, then floats: position at +4, ... scale at +0x1C
+
+
+def effects(b):
+    """EF00 effect placements: list of dict(offset, kind, pos, scale)."""
+    o = struct.unpack_from('<I', b, H_EF00)[0]
+    if o == NONE or b[o:o + 4] != b'EF00':
+        return []
+    n = struct.unpack_from('<H', b, o + 4)[0]
+    out = []
+    for i in range(n):
+        e = o + 8 + i * EFFECT_SIZE
+        out.append(dict(offset=e, kind=b[e], pos=struct.unpack_from('<3f', b, e + 4),
+                        scale=struct.unpack_from('<3f', b, e + 0x1C)))
+    return out
+
+
+def hide_effects_in(buf, lo, hi, drop=100000.0):
+    """Move effects placed inside the box lo..hi (the old arena's area) far below the map, so lamps, falling
+    rubble and the like from the old arena don't appear. Effects at exactly (0, 0, 0) (arena-wide ones) and
+    outside the box (background) are kept. Entries are not removed or reordered. Returns how many moved."""
+    n = 0
+    for e in effects(buf):
+        p = e['pos']
+        if p == (0.0, 0.0, 0.0):
+            continue
+        if all(lo[k] <= p[k] <= hi[k] for k in range(3)):
+            struct.pack_into('<f', buf, e['offset'] + 8, p[1] - drop)
+            n += 1
+    return n
+
+
+def clear_effects(buf):
+    """Remove every EF00 effect placement (count set to 0). Returns how many there were."""
+    o = struct.unpack_from('<I', buf, H_EF00)[0]
+    if o == NONE or buf[o:o + 4] != b'EF00':
+        return 0
+    n = struct.unpack_from('<H', buf, o + 4)[0]
+    struct.pack_into('<HH', buf, o + 4, 0, 0)
+    return n
+
+
+def collision_bounds(b):
+    pts = [v for vl in collision(b)[1] for v in vl.verts]
+    if not pts:
+        return None
+    return tuple(min(p[k] for p in pts) for k in range(3)), tuple(max(p[k] for p in pts) for k in range(3))
+
+
 # ---------------------------------------------------------------- spawns and orbs (CP00)
 
 ENTRY_SIZE = 0x50
@@ -114,9 +191,11 @@ class Record:
     tris: list = field(default_factory=list)         # kind 3: (a, b, c, attr, normal)
 
 
-def collision(b):
-    """All collision records, plus the vertex lists in order."""
-    base = struct.unpack_from('<I', b, H_COLLISION)[0]
+def collision(b, base=None):
+    """All collision records, plus the vertex lists in order. `base` reads a chain at another offset
+    (e.g. an object's own collision); by default the stage collision from header 0x94."""
+    if base is None:
+        base = struct.unpack_from('<I', b, H_COLLISION)[0]
     if base == NONE:
         return [], []
     recs, vlists, o = [], [], base
