@@ -166,6 +166,24 @@ Following the Phantom Dust wiki ALR page and Esper-RE `alr.h`, checked on st04 (
   collision and spawns. Compared with the game, the orientation is correct (not mirrored) with
   Blender = (x, -z, y) x scale.
 
+### Writing models (confirmed in game)
+
+`pdstage/alr_build.py` rebuilds an `.alr` from its parts: header (root offsets), texture table (new entries
+appended), each root's chunk chain (replaced roots rebuilt, others copied), padding to `0x1000`, then the base
+resource buffer unchanged with new vertex/texture data appended. With no changes it reproduces all 22 arena
+files byte for byte.
+
+- New meshes use vertex format `0x01` (shader `sd`, 0x18 bytes): position (3 floats), **packed normal** at
+  `0x0C` (11/11/10 bits signed: x * 1023, y * 1023, z * 511), UV int16 / 4096 at `0x10`, and a **baked vertex
+  colour** at `0x14` (bytes B, G, R, A). The colour is the stage's baked lighting: the game multiplies the texture
+  by it. Format `0x03` (`sbts`) has the same colour at `0x14`, plus tangent data at `0x18`/`0x1C`.
+- Material, vertex-buffer and mesh fields not understood are copied from an existing `sd` mesh.
+- Mesh header `+0x08` centre and `+0x14` radius: smallest enclosing sphere; `+0x18`/`+0x24` bounding box.
+- New textures: uncompressed BGRA (`0x86`), power of two, full mip chain, 12-character base-40 name.
+- Confirmed in game on st04: the stage rebuilt from its own meshes with colours (and the `sshadow*` shadow
+  meshes carried over) looks like the original; without the colours it is uniformly too bright. A stage exported
+  from Blender with an added textured, vertex-lit cube (and collider) shows correctly.
+
 ## Not yet known
 
 - The `.alr` writer (needed for custom visuals) and how stage materials pick shaders.

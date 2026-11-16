@@ -221,6 +221,24 @@ def read_vertices(b, rb_off, vb):
     return pos, uv, uv2
 
 
+# Baked vertex colour (bytes B, G, R, A) per vertex format: the lighting the game multiplies the texture by.
+# Confirmed for these formats on st04; others not checked yet.
+COLOUR_AT = {0x01: 0x14, 0x03: 0x14, 0x09: 0x10}
+
+
+def read_colours(b, rb_off, vb):
+    """Per-vertex (r, g, b, a) bytes, or None if the format has no known colour."""
+    at = COLOUR_AT.get(vb['format'])
+    if at is None:
+        return None
+    base, size = rb_off + vb['offset'] + at, vb['vertex_size']
+    out = []
+    for i in range(vb['count']):
+        c = b[base + i * size:base + i * size + 4]
+        out.append((c[2], c[1], c[0], c[3]))
+    return out
+
+
 def node_matrix(nodes, i):
     """World matrix (row-major 4x4 nested lists) of node i: T * Rz * Ry * Rx * S, times its parents."""
     m = _identity()

@@ -8,6 +8,7 @@ import os
 import tempfile
 
 import bpy
+import numpy as np
 
 from ._lib import alr
 from . import convert as cv
@@ -25,28 +26,51 @@ def _image(b, t, cache, tmpdir):
         with open(path, 'wb') as f:
             f.write(data)
         try:
-            img = bpy.data.images.load(path)
-            img.name = t['name'] or os.path.basename(path)
-            img.pack()                       # keep it in the .blend; the temp file is deleted afterwards
-        except RuntimeError:
+            dds = bpy.data.images.load(path)
+            w, h = dds.size
+            px = np.empty(w * h * 4, dtype=np.float32)
+            dds.pixels.foreach_get(px)
+            bpy.data.images.remove(dds)
+            # Keep a plain image packed as PNG: packed DDS images don't survive saving and reopening well.
+            img = bpy.data.images.new(t['name'] or 'tex', w, h, alpha=True)
+            img.pixels.foreach_set(px)
+            img.file_format = 'PNG'
+            img.pack()
+        except (RuntimeError, ValueError):
             img = None
     cache[t['index']] = img
     return img
 
 
+LIGHT_LAYER = 'PD_Light'     # colour attribute holding the baked lighting (exported as vertex colour)
+
+
 def _material(name, img):
+    """Texture x baked vertex colour, like the game's simple stage shader."""
     mat = bpy.data.materials.get(name)
     if mat:
         return mat
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    light = nt.nodes.new('ShaderNodeVertexColor')
+    light.layer_name = LIGHT_LAYER
+    light.location = (-550, 0)
     if img is not None:
-        nt = mat.node_tree
-        bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
         tex = nt.nodes.new('ShaderNodeTexImage')
         tex.image = img
-        tex.location = (-350, 250)
-        nt.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+        tex.location = (-550, 300)
+        mix = nt.nodes.new('ShaderNodeMix')
+        mix.data_type = 'RGBA'
+        mix.blend_type = 'MULTIPLY'
+        mix.inputs['Factor'].default_value = 1.0
+        mix.location = (-250, 200)
+        nt.links.new(tex.outputs['Color'], mix.inputs['A'])
+        nt.links.new(light.outputs['Color'], mix.inputs['B'])
+        nt.links.new(mix.outputs['Result'], bsdf.inputs['Base Color'])
+    else:
+        nt.links.new(light.outputs['Color'], bsdf.inputs['Base Color'])
     return mat
 
 
@@ -79,11 +103,25 @@ def import_visuals(context, alr_path, parent, scale, roots=(0, 1, 2)):
                     continue
                 vb = m['vbufs'][m['vbuf']]
                 pos, uv, _uv2 = alr.read_vertices(b, h['resource_offset'], vb)
+                cols = alr.read_colours(b, h['resource_offset'], vb)
                 mtx = alr.node_matrix(m['nodes'], m['node']) if m['node'] < len(m['nodes']) else alr._identity()
                 used = sorted({i for t in tris for i in t})
                 remap = {old: new for new, old in enumerate(used)}
                 verts = [cv.to_blender(alr.apply(mtx, pos[i]), scale) for i in used]
-                faces = [tuple(remap[i] for i in t) for t in tris]
+                faces, seen_faces = [], set()
+                for t in tris:
+                    f = tuple(remap[i] for i in t)
+                    if frozenset(f) in seen_faces:
+                        # Same corners as an earlier face (a double-sided wall): Blender would merge the two,
+                        # so give this one its own copies of the vertices.
+                        f2 = []
+                        for k in f:
+                            used.append(used[k])
+                            verts.append(verts[k])
+                            f2.append(len(verts) - 1)
+                        f = tuple(f2)
+                    seen_faces.add(frozenset(f))
+                    faces.append(f)
                 name = '%s_%s_%02d_%s' % (stage, ROOT_NAMES.get(ri, 'm%d' % ri), mi, shader or 'mesh')
                 me = bpy.data.meshes.new(name)
                 me.from_pydata(verts, [], faces)
@@ -93,6 +131,11 @@ def import_visuals(context, alr_path, parent, scale, roots=(0, 1, 2)):
                         for li in poly.loop_indices:
                             u, v = uv[used[me.loops[li].vertex_index]]
                             layer.data[li].uv = (u, 1.0 - v)
+                light = me.color_attributes.new(LIGHT_LAYER, 'BYTE_COLOR', 'POINT')
+                for new_i, old_i in enumerate(used):
+                    c = cols[old_i] if cols else (255, 255, 255, 255)
+                    light.data[new_i].color_srgb = (c[0] / 255, c[1] / 255, c[2] / 255, c[3] / 255)
+                me.color_attributes.active_color = light
                 me.validate()
                 me.update()
                 tex_i = mat_entry['textures'][0] if mat_entry else None

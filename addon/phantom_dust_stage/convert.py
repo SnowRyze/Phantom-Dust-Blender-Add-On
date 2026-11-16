@@ -27,7 +27,8 @@ ROLES = [
     ('NONE', 'None', 'Not exported'),
     ('COLLIDERS', 'Colliders', 'Meshes in here (and in child collections) become collision'),
     ('SPAWNS', 'Spawn Points', 'Child collections are layouts; each holds spawn empties with 3 orb children'),
-    ('VISUALS', 'Visuals (planned)', 'The visible model; not exported yet'),
+    ('VISUALS', 'Visuals', 'Visible meshes: replace the arena\'s stage model (child collections named '
+                           'Background/Sky replace those, if enabled on export)'),
     ('MISC', 'Misc (planned)', 'Cameras, kill height, skybox; not exported yet'),
     ('BREAKABLES', 'Breakables (planned)', 'Not exported yet'),
 ]

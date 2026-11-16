@@ -10,7 +10,7 @@ itself is not written yet. See [FORMATS.md](FORMATS.md) for what is decoded and 
 | Spawns and orbs (`stNN.dat`, `CP00`) | Decoded, confirmed in game |
 | Collision (`stNN.dat`) | Decoded; writer confirmed in game |
 | AI navigation (`comdataN.cad`) | On hold (custom arenas aren't expected to need bots) |
-| Visual stage (`stNN.alr`) | Imports into Blender with textures (stage, background, sky); writing not done |
+| Visual stage (`stNN.alr`) | Import and export with textures and baked lighting; confirmed in game |
 | Blender add-on (Blender 5.3) | Import/export of spawns, orbs and collision; confirmed in game |
 
 ## Requirements
@@ -52,12 +52,16 @@ models and skill animations/projectiles are planned.
      Faces must point the way players stand on or hit them (Blender face normals).
    - **Spawn Points**: each child collection is a layout. In a layout, each spawn is an empty whose **+Y axis
      is the facing** (Blender's green arrow), with exactly **3 child empties** as its orb points.
+   - **Visuals**: the visible meshes; they replace the arena's stage model. Each material's image is the
+     texture (power of two is best; resized to at most 1024). **Lighting is baked into a colour attribute named
+     `PD_Light`** (the game multiplies the texture by it; paint it or bake into it in Blender). Child collections
+     named `Background`/`Sky` replace those models only if "Replace background and sky" is ticked on export.
 3. **File > Export > Phantom Dust Stage (.dat)**: choose which arena it **replaces** and save. The game only
-   loads its existing arena slots, so a custom map takes one over. Copy the result over that `Map\stNN.dat`
-   after backing it up.
+   loads its existing arena slots, so a custom map takes one over. With Visuals it also writes `stNN.alr` next
+   to the `.dat`. Copy both over the game's `Map\stNN.dat` / `.alr` after backing them up.
 
-How the base arena is used: it supplies the parts not made in Blender yet (visible model, effects, objects).
-Without a Colliders or Spawn Points collection its collision or spawns are kept. Most arenas have 4-6 layouts
+How the base arena is used: it supplies the parts not made in Blender (background, sky, effects, objects).
+Without a Colliders, Spawn Points or Visuals collection its collision, spawns or stage model are kept. Most arenas have 4-6 layouts
 of 4 spawns; make 1 or more layouts of 4 and they are repeated to fill the slots.
 
 **Starting from an existing arena (optional):** File > Import > Phantom Dust Stage (.dat) loads an arena's
@@ -65,8 +69,8 @@ collision and spawns into tagged collections, and sets the export to go back to 
 **Visible model** on, it also loads `stNN.alr` from the same folder: the stage, background and sky with their
 textures, lined up with the collision, as a reference (it is not exported yet).
 
-Not exported yet: the visible model and textures (needs the `.alr` writer), cameras, kill height, skybox,
-breakables, and adding more layouts than the base arena has.
+Not exported yet: the game's shadow meshes for a new stage, normal maps and reflections (new meshes use the
+simple `sd` shader), cameras, kill height, breakables, and adding more layouts than the base arena has.
 
 **Tests:** `tests/blender_roundtrip.py` runs in Blender without a window: an imported arena exports with
 identical triangles and spawns, a map built from scratch exports exactly its own geometry and spawns, and
@@ -74,6 +78,8 @@ mistakes (wrong orb or spawn counts) are refused. A file exported by the add-on 
 
 ```
 blender -b --factory-startup --python tests/blender_roundtrip.py -- <Assets/Data folder> <out_dir> [--ingame-test]
+blender -b --factory-startup --python tests/blender_visuals.py   -- <Assets/Data folder> <out_dir> [--ingame-test]
+python tests/alr_rebuild.py <Assets/Data/Map folder> [out_dir]
 ```
 
 ## Credits

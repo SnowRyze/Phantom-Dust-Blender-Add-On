@@ -95,6 +95,33 @@ def gather_collision(context, col_colls, scale):
     return tris
 
 
+def export_visuals(context, base_alr_path, out_alr_path, scale, background_and_sky=False):
+    """Write the .alr from Visuals collections. Returns a report string, or None without Visuals."""
+    from . import visuals_export as vx
+    cols = collections_with_role(context.scene, 'VISUALS')
+    if not cols:
+        return None
+    if not os.path.isfile(base_alr_path):
+        raise ExportError('base arena model not found: %s' % base_alr_path)
+    base = open(base_alr_path, 'rb').read()
+    try:
+        replace, textures, stats = vx.gather(context, cols, scale, vx.alr.textures(base))
+    except vx.VisualsError as e:
+        raise ExportError(str(e))
+    if not background_and_sky:
+        replace = {k: v for k, v in replace.items() if k == 0}
+    if not replace:
+        raise ExportError('the Visuals collection has no mesh triangles for the stage')
+    data, built = vx.alr_build.rebuild(base, replace=replace, textures=textures)
+    with open(out_alr_path, 'wb') as f:
+        f.write(data)
+    tris = sum(s['triangles'] for s in built.values())
+    msg = 'model: %d triangles, %d new textures' % (tris, stats['new_textures'])
+    if stats['clamped_uv']:
+        msg += ' (%d UVs clamped: keep each triangle within 8 texture repeats)' % stats['clamped_uv']
+    return msg
+
+
 def export_scene(context, base_path, out_path, scale):
     if not os.path.isfile(base_path):
         raise ExportError('base arena file not found: %s (set the game data folder in the export options)' % base_path)

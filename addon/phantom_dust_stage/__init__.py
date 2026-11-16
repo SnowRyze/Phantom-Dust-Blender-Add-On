@@ -72,6 +72,10 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
     game_data: StringProperty(name='Game data folder', subtype='DIR_PATH',
                               description="Phantom Dust's Assets\\Data folder")
     scale: FloatProperty(name='Scale', description='Blender units per game unit', default=cv.DEFAULT_SCALE, min=0.0001)
+    background_and_sky: BoolProperty(
+        name='Replace background and sky', default=False,
+        description='Also export Visuals child collections named Background/Sky (off: keep the arena\'s own, '
+                    'including its animated sky)')
 
     def invoke(self, context, event):
         self.base_arena = context.scene.pd_base_arena
@@ -89,6 +93,11 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
         try:
             msg = exporter.export_scene(context, exporter.base_dat_path(game_data, self.base_arena),
                                         self.filepath, self.scale)
+            base_alr = os.path.join(game_data, 'Map', self.base_arena + '.alr')
+            out_alr = os.path.splitext(self.filepath)[0] + '.alr'
+            vmsg = exporter.export_visuals(context, base_alr, out_alr, self.scale, self.background_and_sky)
+            if vmsg:
+                msg += '; ' + vmsg + ' -> ' + os.path.basename(out_alr)
         except exporter.ExportError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -111,7 +120,9 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
         lay.prop(c, 'pd_surface')
         if c.pd_role == 'SPAWNS':
             lay.label(text='Child collections = layouts; spawn empties (+Y = facing) with 3 orb children')
-        elif c.pd_role in ('VISUALS', 'MISC', 'BREAKABLES'):
+        elif c.pd_role == 'VISUALS':
+            lay.label(text='Texture from each material; baked lighting from the PD_Light colour attribute')
+        elif c.pd_role in ('MISC', 'BREAKABLES'):
             lay.label(text='Not exported yet', icon='INFO')
 
 
