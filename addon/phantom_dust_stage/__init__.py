@@ -150,6 +150,8 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
                 lay.prop(c, 'pd_hits')
                 lay.prop(c, 'pd_damage')
                 lay.prop(c, 'pd_debris_stays')
+            if c.pd_preset == 'JUMP_PAD':
+                lay.prop(c, 'pd_jump_power')
             lay.prop(c, 'pd_surface', text='Collider surface')
             col = lay.column(align=True)
             col.label(text='Meshes here = placements (linked duplicates of one mesh)')
@@ -171,8 +173,6 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
             lay.label(text='Each child collection is one object type')
         elif c.pd_role == 'EFFECTS':
             lay.label(text='Each child collection is one effect type (steam, sparks, smoke)')
-        elif c.pd_role == 'MISC':
-            lay.label(text='Not exported yet', icon='INFO')
 
 
 def menu_import(self, context):
@@ -201,6 +201,9 @@ def register():
     bpy.types.Collection.pd_effect = EnumProperty(
         name='Effect', items=EFFECT_ITEMS, default='STEAM',
         description='Which of the game\'s effects to place (copied from your game files when exporting)')
+    bpy.types.Collection.pd_jump_power = bpy.props.IntProperty(
+        name='Jump power', default=150, min=1, max=255,
+        description='How hard the pad launches players (the game\'s pads use 100-250)')
     bpy.types.Collection.pd_hits = bpy.props.IntProperty(
         name='Hits to break', default=1, min=1, max=255,
         description='How many hits the object takes before it breaks')
@@ -229,6 +232,7 @@ def unregister():
     del bpy.types.Collection.pd_effect
     del bpy.types.Collection.pd_damage
     del bpy.types.Collection.pd_hits
+    del bpy.types.Collection.pd_jump_power
     del bpy.types.Collection.pd_debris_stays
     del bpy.types.Collection.pd_preset
     del bpy.types.Collection.pd_surface

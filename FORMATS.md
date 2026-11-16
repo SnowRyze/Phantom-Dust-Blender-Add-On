@@ -236,6 +236,17 @@ Read from `FUN_140203720` (object table) and `FUN_140203dc0` (creates placed obj
   - Object table offset slots per state (intact, broken, debris): `[3..5]` animation (`OA` sections, `.alr` 0x05
     chunks; e.g. Spiral Highway's collapsing bridges), `[6..8]` collision (`OC`), `[9..11]` effects (`OE`).
 
+### Jump pads and falling out (confirmed in game)
+
+- **Jump pads** (category 4, type 16, class `pdStageObjJump`): the game's pads have no model, only a flat square
+  collider (30-60 units wide) as the trigger, and put the **jump strength in the first spare placement byte**
+  (+6): 100, 120, 200 or 250 in the arenas. A pad written with 200 launched a player to about twice the height of
+  a 60-unit wall.
+- **No kill height in arena files**: no arena places an object for it, and the collision bounds are only used for
+  the lookup grid. Tested with a gap in the floor collision: a player who fell through was put back on the map by
+  the game. Narrow gaps are hard to fall through (players catch on edges).
+- Category 4 also has `ReadLim` ("genkai", type 15) and trigger walls (types 1-12), only used in Sein (st09).
+
 ## Effects (`EF00`, header `0x98`) (confirmed in game)
 
 `0x5C`-byte entries: `u8 kind, u8 layout filter (0 = always, else only for layout value - 6), u8 0xFF, u8 0,

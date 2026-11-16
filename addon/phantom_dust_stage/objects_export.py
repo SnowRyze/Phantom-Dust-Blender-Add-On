@@ -135,6 +135,11 @@ def gather(context, obj_colls, scale, textures):
                 if abs(e.x) > 1e-3 or abs(e.y) > 1e-3:
                     raise ObjectsError('%s is tilted; only rotation about Z (turning) is supported for now' % o.name)
                 placements.append(dict(pos=cv.to_game(mw.translation, scale), rot=(0.0, e.z, 0.0)))
+            if preset == 'JUMP_PAD':
+                # The game's jump pads put the jump strength in the first spare placement byte (100-250).
+                power = max(1, min(255, int(getattr(tc, 'pd_jump_power', 150))))
+                for p in placements:
+                    p['extra'] = (power, 0)
             types.append(dict(name=tc.name, models=models, collision=collision, category=category, type=typ,
                               placements=placements, preset=preset))
     return types, stats
@@ -155,5 +160,6 @@ def add_to_files(types, alr_add_models, alr_added_roots):
         idx = len(objects)
         objects.append(dict(name=t['name'][:31], roots=tuple(roots), collision=t['collision']))
         for p in t['placements']:
-            placements.append(dict(object=idx, category=t['category'], type=t['type'], pos=p['pos'], rot=p['rot']))
+            placements.append(dict(object=idx, category=t['category'], type=t['type'], pos=p['pos'], rot=p['rot'],
+                                   extra=p.get('extra', (0, 0))))
     return objects, placements

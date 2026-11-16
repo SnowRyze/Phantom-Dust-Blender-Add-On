@@ -33,7 +33,6 @@ ROLES = [
                            'collider); every mesh directly in it is one placement'),
     ('EFFECTS', 'Effects', 'Ambient effects: each child collection is one effect type (steam, sparks, smoke); '
                            'every object directly in it is one placement'),
-    ('MISC', 'Misc (planned)', 'Kill height and the like; not exported yet'),
 ]
 
 

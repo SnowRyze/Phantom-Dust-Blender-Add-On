@@ -169,7 +169,12 @@ parts = [
 ]
 for name, size, loc, mat, cuts in parts:
     visual(name, size, loc, mat, cuts, vis)
-    collider('COL_' + name, size, loc, cols)
+    if name != 'Floor':
+        collider('COL_' + name, size, loc, cols)
+
+collider('COL_Floor', (2 * HALF, 2 * HALF, T), (0, 0, FLOOR_Z - T / 2), cols)
+# (A test build left a hidden gap in this floor collider: a player who fell through was put back on the map by
+#  the game, so maps need no kill height.)
 
 # Ramp from the floor up to the platform top (2 m over 6 m), along +Y next to the platform
 ramp_len = math.hypot(6.0, 2.0)
@@ -197,6 +202,69 @@ for i, (x, y) in enumerate(corners, 1):
         o.parent = e
         o.location = (0, 2.0 + 1.5 * k, 0.5)          # in front of the spawn, along its +Y
         lay.objects.link(o)
+
+# ---------------------------------------------------------------- sky dome and background (replace the city)
+def sky_colour(u, v):                 # v = 0 at the bottom of the image (horizon), 1 at the top (zenith)
+    t = min(1.0, v * 1.4)
+    return (0.75 - 0.6 * t, 0.85 - 0.5 * t, 0.95 - 0.25 * t)
+
+
+def sand(u, v):
+    n = (math.sin(u * 91.7) * math.sin(v * 77.3) + math.sin(u * 23.1 + v * 41.9)) * 0.05
+    return (0.62 + n, 0.55 + n, 0.42 + n)
+
+
+IMAGES['ex_sky'] = make_image('ex_sky', 8, 128, sky_colour)
+IMAGES['ex_sand'] = make_image('ex_sand', 128, 128, sand)
+for k in ('ex_sky', 'ex_sand'):
+    MATERIALS[k] = pd_visuals._material(k + '_mat', IMAGES[k])
+
+
+def white_light(me):
+    light = me.color_attributes.new('PD_Light', 'BYTE_COLOR', 'POINT')
+    for d in light.data:
+        d.color_srgb = (1, 1, 1, 1)
+    me.color_attributes.active_color = light
+
+
+sky_coll = collection('Sky', vis)
+bm = bmesh.new()
+bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=1200.0)
+bmesh.ops.reverse_faces(bm, faces=bm.faces[:])                 # face inwards: seen from inside
+me = bpy.data.meshes.new('SkyDome')
+bm.to_mesh(me)
+bm.free()
+uvl = me.uv_layers.new(name='UVMap')
+for poly in me.polygons:
+    for li in poly.loop_indices:
+        p = me.vertices[me.loops[li].vertex_index].co
+        elev = max(0.0, p.z / 1200.0)                          # 0 at the horizon and below, 1 at the top
+        uvl.data[li].uv = (0.5, 0.02 + 0.96 * elev)
+me.materials.append(MATERIALS['ex_sky'])
+white_light(me)
+sky = bpy.data.objects.new('SkyDome', me)
+sky.hide_render = True                                         # not part of the lighting bake
+sky_coll.objects.link(sky)
+
+bg_coll = collection('Background', vis)
+bm = bmesh.new()
+# A grid, not one big polygon: each triangle may span at most 8 texture repeats. 1600 m square (corners inside
+# the 1200 m sky dome), 12 x 12 cells of ~133 m, one texture repeat per 25 m.
+bmesh.ops.create_grid(bm, x_segments=12, y_segments=12, size=800.0)
+me = bpy.data.meshes.new('Ground')
+bm.to_mesh(me)
+bm.free()
+uvl = me.uv_layers.new(name='UVMap')
+for poly in me.polygons:
+    for li in poly.loop_indices:
+        p = me.vertices[me.loops[li].vertex_index].co
+        uvl.data[li].uv = (p.x / 25.0, p.y / 25.0)
+me.materials.append(MATERIALS['ex_sand'])
+white_light(me)
+ground = bpy.data.objects.new('Ground', me)
+ground.location = (0, 0, FLOOR_Z - 20.0)
+ground.hide_render = True
+bg_coll.objects.link(ground)
 
 # ---------------------------------------------------------------- objects: a breakable crate and a bench
 def lit_box_mesh(name, lo, hi, mat):
@@ -273,6 +341,15 @@ for i, (x, y, rz) in enumerate([(0, 13, 0.0), (-13, 0, math.pi / 2)]):
 bench_broken = collection('Broken', bench_type)
 model_object('Bench_piece_L', join_meshes('Bench_piece_L', [lit_box_mesh('pl', (-2, -0.6, 0.6), (-0.1, 0.6, 0.9), 'ex_bricks'), leg_l]), bench_broken)
 model_object('Bench_piece_R', join_meshes('Bench_piece_R', [lit_box_mesh('pr', (0.1, -0.6, 0.4), (2, 0.6, 0.7), 'ex_bricks'), leg_r]), bench_broken)
+pad_type = collection('JumpPad', objs)
+pad_type.pd_preset = 'JUMP_PAD'
+pad_type.pd_jump_power = 200
+pad_mesh = lit_box_mesh('JumpPad', (-1.5, -1.5, 0), (1.5, 1.5, 0.1), 'ex_stripes')
+pad = bpy.data.objects.new('JumpPad', pad_mesh)
+pad.location = (0, -6, FLOOR_Z)
+pad.hide_render = True
+pad_type.objects.link(pad)
+
 bench_debris = collection('Debris', bench_type)
 model_object('Bench_debris', join_meshes('Bench_debris', [
     lit_box_mesh('bd1', (-1.8, -0.5, 0), (-0.2, 0.5, 0.3), 'ex_bricks'),
@@ -308,7 +385,7 @@ scene.cycles.samples = 32
 bpy.context.view_layer.update()
 for ob in bpy.context.view_layer.objects:
     ob.select_set(False)
-visuals = [o for o in vis.objects]
+visuals = [o for o in vis.objects]          # the arena itself (not the sky or background in child collections)
 for o in visuals:
     o.select_set(True)
 bpy.context.view_layer.objects.active = visuals[0]
@@ -331,5 +408,6 @@ bpy.ops.wm.save_as_mainfile(filepath=blend)
 print('SAVED', blend)
 
 out = os.path.join(out_dir, base_arena + '.dat')
-res = bpy.ops.export_scene.phantom_dust_stage(filepath=out, base_arena=base_arena, game_data=data)
+res = bpy.ops.export_scene.phantom_dust_stage(filepath=out, base_arena=base_arena, game_data=data,
+                                              background_and_sky=True)
 print('EXPORT', res, out)

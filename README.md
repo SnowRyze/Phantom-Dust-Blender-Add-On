@@ -77,6 +77,11 @@ turned about Z only, scale 1). Optional child collections: `Broken` (each mesh i
 (default: a box around the model). Model them around the world origin.
 For destructible objects, debris speed is decided by the game, not the add-on: it comes from the piece's mass
 (lighter = faster), with a fixed limit, so debris only travels a short way.
+**Jump pads:** preset Jump Pad, with **Jump power** (the game's own pads use 100-250; 200 launches a player to
+about twice the height of a 6 m wall). The mesh is the visible pad; its collider is what players step on.
+
+**Falling out of the map:** no kill height is needed. A player who falls out of the map is put back on it by the
+game (tested). Small gaps are forgiving: players tend to catch on the edges.
 
 **Effects:** an Effects collection holds one child collection per effect type; choose its **Effect** (Steam,
 Sparks, Smoke: the game's own effects that work in any arena, copied from your game files at export). Every
@@ -89,8 +94,13 @@ are removed, so only what you made appears.
 
 Character shadows work on exported stages ("Character shadows" export option, on by default).
 
-Not exported yet: shadows cast by the stage itself (e.g. under stairs), normal maps and reflections (new meshes use the simple
-`sd` shader), cameras, kill height, breakables, and adding more layouts than the base arena has.
+Sky and background: child collections `Sky` and `Background` under Visuals, exported with "Replace background
+and sky" (tested in game). They use the simple shader, so a sky doesn't animate like the game's clouds, and the
+replaced arena's distance fog and brightness still apply.
+
+Not done yet: shadows cast by the stage itself (e.g. under stairs), normal maps and reflections (new meshes use the
+simple `sd` shader), fog and lighting settings, stage variants (objects and effects that change between matches),
+and adding more layouts than the base arena has.
 
 **Tests:** `tests/blender_roundtrip.py` runs in Blender without a window: an imported arena exports with
 identical triangles and spawns, a map built from scratch exports exactly its own geometry and spawns, and
