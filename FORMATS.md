@@ -184,6 +184,20 @@ files byte for byte.
   meshes carried over) looks like the original; without the colours it is uniformly too bright. A stage exported
   from Blender with an added textured, vertex-lit cube (and collider) shows correctly.
 
+### Shadow mesh (confirmed in game)
+
+Each stage model has a mesh with shader `sshadowch` (vertex format `0x07`: position + packed normal, 0x10 bytes),
+and st04 also a small `sshadowc` one (format `0x10`, position only). In st04 the `sshadowch` mesh is mostly
+walls, pillars and stairs between heights 50 and 160, a third of it coinciding with visible triangles: it behaves
+like **shadow volumes** of the stage.
+
+Tested on st04:
+- Stage without any shadow mesh: characters cast **no shadow**.
+- Stage rebuilt with the original shadow meshes carried over: character shadows as normal.
+- Shadow mesh = a copy of every stage triangle: surfaces turn dark, patchy and partly see-through.
+- Shadow mesh = a **1-unit closed box 1000 units below the stage**: clean surfaces and character shadows work.
+  The writer uses this by default; the stage then casts no shadows of its own.
+
 ## Not yet known
 
 - The `.alr` writer (needed for custom visuals) and how stage materials pick shaders.

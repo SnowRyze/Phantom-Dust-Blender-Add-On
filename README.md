@@ -69,8 +69,9 @@ collision and spawns into tagged collections, and sets the export to go back to 
 **Visible model** on, it also loads `stNN.alr` from the same folder: the stage, background and sky with their
 textures, lined up with the collision, as a reference (it is not exported yet).
 
-Not exported yet: the game's shadow meshes for a new stage, normal maps and reflections (new meshes use the
-simple `sd` shader), cameras, kill height, breakables, and adding more layouts than the base arena has.
+Character shadows work on exported stages ("Character shadows" export option, on by default). Not exported
+yet: shadows cast by the stage itself (e.g. under stairs), normal maps and reflections (new meshes use the simple
+`sd` shader), cameras, kill height, breakables, and adding more layouts than the base arena has.
 
 **Tests:** `tests/blender_roundtrip.py` runs in Blender without a window: an imported arena exports with
 identical triangles and spawns, a map built from scratch exports exactly its own geometry and spawns, and

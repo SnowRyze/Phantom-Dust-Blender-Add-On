@@ -76,6 +76,10 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
         name='Replace background and sky', default=False,
         description='Also export Visuals child collections named Background/Sky (off: keep the arena\'s own, '
                     'including its animated sky)')
+    shadows: BoolProperty(
+        name='Character shadows', default=True,
+        description='Add the shadow mesh the game needs for characters to cast shadows (a tiny hidden box; '
+                    'the stage itself casts no shadows yet)')
 
     def invoke(self, context, event):
         self.base_arena = context.scene.pd_base_arena
@@ -95,7 +99,8 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
                                         self.filepath, self.scale)
             base_alr = os.path.join(game_data, 'Map', self.base_arena + '.alr')
             out_alr = os.path.splitext(self.filepath)[0] + '.alr'
-            vmsg = exporter.export_visuals(context, base_alr, out_alr, self.scale, self.background_and_sky)
+            vmsg = exporter.export_visuals(context, base_alr, out_alr, self.scale, self.background_and_sky,
+                                           self.shadows)
             if vmsg:
                 msg += '; ' + vmsg + ' -> ' + os.path.basename(out_alr)
         except exporter.ExportError as e:

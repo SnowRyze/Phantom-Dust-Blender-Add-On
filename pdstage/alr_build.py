@@ -87,6 +87,17 @@ def _templates(b):
         raise ValueError('base .alr has no "sd" format-0x01 mesh to copy settings from')
     if prim5_unk is not None:
         found['mesh'][0x30:0x40] = prim5_unk          # fields that go with triangle-list meshes
+    # The stage's shadow mesh (shader sshadowch, vertex format 0x07): without it characters cast no shadow.
+    found['shadow'] = None
+    for r in h['roots']:
+        mats = None
+        for off, t, size in alr.chain(b, r):
+            if t == 0x01:
+                mats = alr._materials(b, off)
+            elif t == 0x02 and mats and found['shadow'] is None:
+                mat_i = struct.unpack_from('<H', b, off + 0x40)[0]
+                if mat_i < len(mats) and mats[mat_i]['shader'] == 'sshadowch':
+                    found['shadow'] = dict(material=bytes(mats[mat_i]['raw']), header=bytes(b[off:off + 0x68]))
     tex = [t for t in alr.textures(b)]
     t86 = next((t for t in tex if t['raw_format'] == TEX_FORMAT), None)
     hoff = h['header_size']
@@ -133,6 +144,71 @@ def split_mesh(verts, tris, limit=MAX_VERTS):
     if cur:
         parts.append(([verts[i] for i in sorted(remap, key=remap.get)], cur))
     return parts
+
+
+SHADOW_FORMAT = 0x07
+SHADOW_VERTEX_SIZE = 0x10
+
+
+def _box(centre, size):
+    """Closed box, outward-facing triangles: (verts [(pos, normal)], tris)."""
+    cx, cy, cz = centre
+    s = size / 2
+    corner = lambda i: (cx + (s if i & 1 else -s), cy + (s if i & 2 else -s), cz + (s if i & 4 else -s))
+    quads = [(0, 2, 3, 1), (4, 5, 7, 6), (0, 1, 5, 4), (2, 6, 7, 3), (0, 4, 6, 2), (1, 3, 7, 5)]
+    verts, tris = [], []
+    for q in quads:
+        a, b_, c, d = (corner(i) for i in q)
+        u = [b_[k] - a[k] for k in range(3)]
+        v = [c[k] - a[k] for k in range(3)]
+        n = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+        base = len(verts)
+        verts += [(p, n) for p in (a, b_, c, d)]
+        tris += [(base, base + 1, base + 2), (base, base + 2, base + 3)]
+    return verts, tris
+
+
+def shadow_meshes(tpl, meshes, mode='minimal'):
+    """Shadow mesh for a stage, using the base arena's sshadowch material (vertex format 0x07).
+
+    The game needs one for characters to cast shadows. In the original arenas it holds shadow volumes of the
+    stage (closed shapes the game darkens what falls inside), so a plain copy of the stage looks wrong.
+    mode 'minimal': a 1-unit closed box far below the stage: turns character shadows on, adds no stage shadows.
+    mode 'full': every triangle of the meshes (for experiments; draws badly in game).
+    Returns raw mesh dicts for build_model (empty if the base arena has no shadow mesh)."""
+    if not tpl.get('shadow'):
+        return []
+    index, verts, tris = {}, [], []
+    if mode == 'minimal':
+        pts = [m['verts'][i][0] for m in meshes if 'raw' not in m for t in m['tris'] for i in t]
+        if not pts:
+            return []
+        lo = [min(p[k] for p in pts) for k in range(3)]
+        hi = [max(p[k] for p in pts) for k in range(3)]
+        box_v, box_t = _box(((lo[0] + hi[0]) / 2, lo[1] - 1000.0, (lo[2] + hi[2]) / 2), 1.0)
+        verts = [(p, pack_normal(n)) for p, n in box_v]
+        tris = box_t
+        meshes = []
+    for m in meshes:
+        if 'raw' in m:
+            continue
+        for t in m['tris']:
+            out = []
+            for i in t:
+                pos, nrm = m['verts'][i][0], m['verts'][i][1]
+                key = (tuple(round(c, 3) for c in pos), pack_normal(nrm))
+                if key not in index:
+                    index[key] = len(verts)
+                    verts.append(key)
+                out.append(index[key])
+            tris.append(tuple(out))
+    result = []
+    for part_verts, part_tris in split_mesh(verts, tris):
+        data = b''.join(struct.pack('<3fI', *p, n) for p, n in part_verts)
+        result.append(dict(raw=dict(material=tpl['shadow']['material'], format=SHADOW_FORMAT,
+                                    vertex_size=SHADOW_VERTEX_SIZE, vertex_bytes=data, tris=part_tris,
+                                    header=tpl['shadow']['header'])))
+    return result
 
 
 def build_model(tpl, meshes, texture_base_index, rb_base):
@@ -238,12 +314,14 @@ def raw_mesh(b, mesh, rb_off):
 
 # ---------------------------------------------------------------- the whole file
 
-def rebuild(b, replace=None, textures=(), clear=()):
+def rebuild(b, replace=None, textures=(), clear=(), shadows_for=(), shadow_mode='minimal'):
     """New .alr bytes.
 
-    replace:  {root index: list of meshes} (see build_model); texture indices refer to `textures`.
-    textures: list of dict(name, width, height, levels=[BGRA bytes per mip, top row first]).
-    clear:    root indices to empty (e.g. remove the background).
+    replace:     {root index: list of meshes} (see build_model); texture indices refer to `textures`.
+    textures:    list of dict(name, width, height, levels=[BGRA bytes per mip, top row first]).
+    clear:       root indices to empty (e.g. remove the background).
+    shadows_for: replaced roots that also get a shadow mesh made from their triangles (the stage, root 0,
+                 needs one for characters to cast shadows).
     With no arguments the result is byte-identical to the input."""
     replace = replace or {}
     h = alr.header(b)
@@ -270,7 +348,10 @@ def rebuild(b, replace=None, textures=(), clear=()):
     empty = _empty_chain(b) if clear else None
     for i, r in enumerate(h['roots']):
         if i in replace:
-            chain, vdata, st = build_model(tpl, replace[i], t15[2], len(rb))
+            ms = list(replace[i])
+            if i in shadows_for:
+                ms += shadow_meshes(tpl, ms, shadow_mode)
+            chain, vdata, st = build_model(tpl, ms, t15[2], len(rb))
             rb += vdata
             stats[i] = st
             chains.append(chain)

@@ -120,6 +120,13 @@ added = sum(stage_tris(c).values()) - sum(ta.values())
 check(added == 12, 'cube adds 12 triangles to the stage (got %d)' % added)
 ccols = Counter(col for (corners, tex), n in stage_tris(c).items() if tex == 'pd_checker' for _, _, col in corners)
 check(set(ccols) == {(89, 89, 89, 255), (255, 255, 255, 255)}, 'cube carries its painted lighting %s' % dict(ccols))
+hc = alr.header(c)
+sh = [m for m in alr.meshes(c, hc['roots'][0]) if m['materials'][m['material']]['shader'] == 'sshadowch']
+sh_tris = sum(len(alr.triangles_from_indices(m['indices'], m['primitive'])) for m in sh)
+sh_y = [p[1] for m in sh for p in alr.read_vertices(c, hc['resource_offset'], m['vbufs'][m['vbuf']])[0]]
+stage_y = [v[1] for (corners, _t) in stage_tris(c) for v, _uv, _col in corners]
+check(len(sh) == 1 and sh[0]['vbufs'][sh[0]['vbuf']]['format'] == 0x07 and sh_tris == 12 and max(sh_y) < min(stage_y) - 900,
+      'shadow mesh: a 12-triangle box far below the stage (turns character shadows on, confirmed in game)')
 if '--ingame-test' in args:
     check(len(dat.triangles(open(out2, 'rb').read())) == len(dat.triangles(open(os.path.join(data, 'Map', 'st04.dat'), 'rb').read())) + 12,
           'cube collider added to the collision')

@@ -95,7 +95,7 @@ def gather_collision(context, col_colls, scale):
     return tris
 
 
-def export_visuals(context, base_alr_path, out_alr_path, scale, background_and_sky=False):
+def export_visuals(context, base_alr_path, out_alr_path, scale, background_and_sky=False, shadows=True):
     """Write the .alr from Visuals collections. Returns a report string, or None without Visuals."""
     from . import visuals_export as vx
     cols = collections_with_role(context.scene, 'VISUALS')
@@ -112,11 +112,14 @@ def export_visuals(context, base_alr_path, out_alr_path, scale, background_and_s
         replace = {k: v for k, v in replace.items() if k == 0}
     if not replace:
         raise ExportError('the Visuals collection has no mesh triangles for the stage')
-    data, built = vx.alr_build.rebuild(base, replace=replace, textures=textures)
+    data, built = vx.alr_build.rebuild(base, replace=replace, textures=textures,
+                                       shadows_for=(0,) if shadows and 0 in replace else ())
     with open(out_alr_path, 'wb') as f:
         f.write(data)
-    tris = sum(s['triangles'] for s in built.values())
-    msg = 'model: %d triangles, %d new textures' % (tris, stats['new_textures'])
+    written = sum(len(m['tris']) for ms in replace.values() for m in ms)
+    msg = 'model: %d triangles, %d new textures' % (written, stats['new_textures'])
+    if shadows and 0 in replace:
+        msg += ', character shadows on'
     if stats['clamped_uv']:
         msg += ' (%d UVs clamped: keep each triangle within 8 texture repeats)' % stats['clamped_uv']
     return msg
