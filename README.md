@@ -11,7 +11,7 @@ itself is not written yet. See [FORMATS.md](FORMATS.md) for what is decoded and 
 | Collision (`stNN.dat`) | Decoded; writer confirmed in game |
 | AI navigation (`comdataN.cad`) | On hold (custom arenas aren't expected to need bots) |
 | Visual stage (`stNN.alr`) | Readable; writing not done |
-| Blender add-on | Not started |
+| Blender add-on (Blender 5.3) | Import/export of spawns, orbs and collision; confirmed in game |
 
 ## Requirements
 
@@ -36,16 +36,43 @@ python tools/test_patch.py    ...                         the in-game test edits
 `test_patch.py` never edits a file in place. To try an edit, back up the arena's `.dat`, copy the output
 over it, play that arena, then put the backup back.
 
-## Planned Blender workflow
+## Blender add-on
 
-Collections carry the role, so objects inside need no tags:
+Build the zip with `python tools/build_addon.py`, then in Blender 5.3: Edit > Preferences > Get Extensions >
+menu (top right) > Install from Disk, and pick `dist/phantom_dust_stage-<version>.zip`.
 
-- **Visuals**: the visible meshes
-- **Colliders**: collision meshes
-- **Spawn_Points**: one sub-collection per layout, 4 `SPAWN_n` empties each with 3 `ORB` children
-  (empty position = spawn, its rotation = facing)
-- **Misc**: `CAM_01`, `CAM_02`... for the intro camera, `KILL_HEIGHT` empty, `SKYBOX`
-- **Breakables**: reserved
+The add-on converts what you build in Blender into the files Phantom Dust reads. Maps come first; character
+models and skill animations/projectiles are planned.
+
+**Building a map**
+1. Set the game data folder once: Edit > Preferences > Add-ons > Phantom Dust Stage > `Assets\Data` folder.
+2. Make collections and give each a role in **Collection Properties > Phantom Dust**:
+   - **Colliders**: every mesh inside (and in child collections) becomes collision. Set **Surface type** on a
+     collection (hex, e.g. `07`); children inherit it; the default is `08`, the common floor/wall type.
+     Faces must point the way players stand on or hit them (Blender face normals).
+   - **Spawn Points**: each child collection is a layout. In a layout, each spawn is an empty whose **+Y axis
+     is the facing** (Blender's green arrow), with exactly **3 child empties** as its orb points.
+3. **File > Export > Phantom Dust Stage (.dat)**: choose which arena it **replaces** and save. The game only
+   loads its existing arena slots, so a custom map takes one over. Copy the result over that `Map\stNN.dat`
+   after backing it up.
+
+How the base arena is used: it supplies the parts not made in Blender yet (visible model, effects, objects).
+Without a Colliders or Spawn Points collection its collision or spawns are kept. Most arenas have 4-6 layouts
+of 4 spawns; make 1 or more layouts of 4 and they are repeated to fill the slots.
+
+**Starting from an existing arena (optional):** File > Import > Phantom Dust Stage (.dat) loads an arena's
+collision and spawns into tagged collections, and sets the export to go back to the same slot.
+
+Not exported yet: the visible model and textures (needs the `.alr` writer), cameras, kill height, skybox,
+breakables, and adding more layouts than the base arena has.
+
+**Tests:** `tests/blender_roundtrip.py` runs in Blender without a window: an imported arena exports with
+identical triangles and spawns, a map built from scratch exports exactly its own geometry and spawns, and
+mistakes (wrong orb or spawn counts) are refused. A file exported by the add-on worked in game.
+
+```
+blender -b --factory-startup --python tests/blender_roundtrip.py -- <Assets/Data folder> <out_dir> [--ingame-test]
+```
 
 ## Credits
 

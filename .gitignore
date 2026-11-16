@@ -20,6 +20,7 @@
 *.png
 !docs/**/*.png
 out/
+dist/
 
 # Python
 __pycache__/
