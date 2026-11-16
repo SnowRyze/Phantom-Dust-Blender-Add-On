@@ -35,7 +35,7 @@ Everything is in the 3D View sidebar: press **N**, tab **Phantom Dust**.
 ## Quick start
 
 1. **New Arena Setup** (sidebar). In an empty scene it makes the tagged collections, a 30 m floor with its
-   collider, one spawn layout (4 spawns, 3 orbs each) and a sun.
+   collider, one spawn layout (4 spawns, 3 orbs each), a jump pad in the middle and a sun.
 2. Model your arena under **Visuals**. Put simple shapes for what players stand on and bump into under
    **Colliders**. Move the spawns and orbs where you want them.
 3. **Bake Lighting** (sidebar): bakes the sun and sky light into the stage's colours.

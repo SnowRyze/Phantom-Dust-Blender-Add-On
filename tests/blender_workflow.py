@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(ROOT, 'addon'))
 sys.path.insert(0, ROOT)
 import phantom_dust_stage as addon                     # noqa: E402
 from phantom_dust_stage import exporter, scene_tools   # noqa: E402
-from pdstage import dat, maplight                      # noqa: E402
+from pdstage import dat, maplight, objects_build       # noqa: E402
 
 src_data, work = sys.argv[sys.argv.index('--') + 1:][:2]
 data = os.path.join(work, 'Data')
@@ -82,6 +82,10 @@ for run in (1, 2):
     if run == 1:
         first = sizes
 check(sizes == first, 'second export starts from the backup, not the installed map (same size %d)' % sizes)
+_names, _table, places = objects_build.read_objects(game_dat)
+pad = [p for p in places if (p['category'], p['type']) == objects_build.PRESETS['JUMP_PAD'][:2]]
+check(len(pad) == 1 and abs(pad[0]['pos'][1] - scene_tools.FLOOR_Z * 10) < 0.5,
+      'the setup\'s jump pad is placed on the floor (%s)' % [p['pos'] for p in pad])
 d = maplight.describe(maplight.script_of(game_dat))
 check(d['sets'][0]['direction'][1] < 0, 'game light points down, following the sun')
 check(dat.check_collision(game_dat)['bad_index'] == 0, 'collision readable')

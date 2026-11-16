@@ -43,9 +43,49 @@ def _checker(name, size=64, cells=8):
     return img
 
 
+def _stripes(name, size=64):
+    img = bpy.data.images.new(name, size, size, alpha=False)
+    px = []
+    for y in range(size):
+        for x in range(size):
+            on = ((x + y) * 6 // size) % 2
+            px += (0.9, 0.75, 0.1, 1.0) if on else (0.08, 0.08, 0.08, 1.0)
+    img.pixels = px
+    img.pack()
+    return img
+
+
+def _jump_pad_object(name='JumpPad', size=3.0, height=0.1):
+    """A 3 x 3 m hazard-striped slab, origin at its bottom centre, standing on the floor in the middle."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    for v in bm.verts:
+        v.co.x *= size
+        v.co.y *= size
+        v.co.z = (v.co.z + 0.5) * height
+    bm.to_mesh(me)
+    bm.free()
+    uv = me.uv_layers.new(name='UVMap')
+    for li, loop in enumerate(me.loops):
+        p = me.vertices[loop.vertex_index].co
+        uv.data[li].uv = (p.x / size + 0.5, p.y / size + 0.5)
+    me.materials.append(pd_visuals._material('JumpPad_mat', _stripes('pd_jumppad')))
+    light = me.color_attributes.new(LIGHT, 'BYTE_COLOR', 'CORNER')     # top bright, sides a little darker
+    for poly in me.polygons:
+        s = 1.0 if poly.normal.z > 0.5 else 0.7
+        for li in poly.loop_indices:
+            light.data[li].color_srgb = (s, s, s, 1.0)
+    me.color_attributes.active_color = light
+    ob = bpy.data.objects.new(name, me)
+    ob.location = (0, 0, FLOOR_Z)
+    ob.hide_render = True                    # objects stay out of the stage lighting bake
+    return ob
+
+
 class PDSTAGE_OT_new_arena(bpy.types.Operator):
     """Set up this scene for a new arena: tagged collections, a floor with its collider, one spawn layout
-    (4 spawns with 3 orbs each) and a sun for the lighting"""
+    (4 spawns with 3 orbs each), a jump pad and a sun for the lighting"""
     bl_idname = 'pdstage.new_arena'
     bl_label = 'New Arena Setup'
     bl_options = {'REGISTER', 'UNDO'}
@@ -67,7 +107,7 @@ class PDSTAGE_OT_new_arena(bpy.types.Operator):
         cols = _collection(scene, 'Colliders', role='COLLIDERS', surface='08')
         sp = _collection(scene, 'Spawn_Points', role='SPAWNS')
         lay = _collection(scene, 'LAYOUT_1', sp)
-        _collection(scene, 'Objects', role='OBJECTS')
+        objs = _collection(scene, 'Objects', role='OBJECTS')
         _collection(scene, 'Effects', role='EFFECTS')
 
         # floor: a subdivided plane (more vertices = smoother baked light), with a checker so scale is visible
@@ -115,6 +155,12 @@ class PDSTAGE_OT_new_arena(bpy.types.Operator):
                 o.parent = e
                 o.location = (0, 2.0 + 1.5 * k, 0.5)
                 lay.objects.link(o)
+
+        # a jump pad in the middle: an object type with the Jump Pad behaviour; duplicate it (Alt+D) for more
+        pads = _collection(scene, 'JumpPad', objs)
+        pads.pd_preset = 'JUMP_PAD'
+        pads.pd_jump_power = 200
+        pads.objects.link(_jump_pad_object())
 
         sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN'))
         sun.data.energy = 3.0
