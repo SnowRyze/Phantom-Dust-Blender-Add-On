@@ -378,6 +378,10 @@ sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN'))
 sun.data.energy = 3.0
 sun.rotation_euler = (math.radians(50), math.radians(15), math.radians(35))
 scene.collection.objects.link(sun)
+# Game lighting (Scene Properties > Phantom Dust Lighting): the game's own light follows the same sun, so
+# characters and the game's shading of the stage agree with the bake. Colours stay at their defaults.
+scene.pd_light_custom = True
+scene.pd_sun = sun
 
 scene.render.engine = 'CYCLES'
 scene.cycles.device = 'CPU'

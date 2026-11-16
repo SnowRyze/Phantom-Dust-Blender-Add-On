@@ -175,6 +175,38 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
             lay.label(text='Each child collection is one effect type (steam, sparks, smoke)')
 
 
+class PDSTAGE_PT_lighting(bpy.types.Panel):
+    bl_label = 'Phantom Dust Lighting'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'scene'
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene, 'pd_light_custom', text='')
+
+    def draw(self, context):
+        s = context.scene
+        lay = self.layout
+        lay.active = s.pd_light_custom
+        lay.prop(s, 'pd_sun')
+        col = lay.column(align=True)
+        col.label(text='Stage, objects and effects:')
+        col.prop(s, 'pd_stage_light')
+        col.prop(s, 'pd_stage_ambient')
+        col = lay.column(align=True)
+        col.label(text='Characters:')
+        col.prop(s, 'pd_char_light')
+        col.prop(s, 'pd_char_ambient')
+        box = lay.box()
+        box.label(text='The game multiplies the stage\'s baked PD_Light', icon='INFO')
+        box.label(text='colours by this light. Off: keep the arena\'s own.')
+        box.label(text='Fog is not supported (the PC version ignores it).')
+
+
+def _sun_poll(self, ob):
+    return ob.type == 'LIGHT' and ob.data.type == 'SUN'
+
+
 def menu_import(self, context):
     self.layout.operator(PDSTAGE_OT_import.bl_idname, text='Phantom Dust Stage (.dat)')
 
@@ -183,7 +215,12 @@ def menu_export(self, context):
     self.layout.operator(PDSTAGE_OT_export.bl_idname, text='Phantom Dust Stage (.dat)')
 
 
-classes = (PDSTAGE_Preferences, PDSTAGE_OT_import, PDSTAGE_OT_export, PDSTAGE_PT_collection)
+classes = (PDSTAGE_Preferences, PDSTAGE_OT_import, PDSTAGE_OT_export, PDSTAGE_PT_collection, PDSTAGE_PT_lighting)
+
+
+def _colour(name, default, desc):
+    return bpy.props.FloatVectorProperty(name=name, subtype='COLOR_GAMMA', size=3, min=0.0, max=1.0,
+                                         default=default, description=desc)
 
 
 def register():
@@ -215,6 +252,20 @@ def register():
     bpy.types.Scene.pd_base_arena = EnumProperty(name='Base arena', items=ARENA_ITEMS, default='st04')
     bpy.types.Scene.pd_scale = FloatProperty(name='Scale', default=cv.DEFAULT_SCALE, min=0.0001)
     bpy.types.Scene.pd_imported = BoolProperty(name='Started from an imported arena', default=False)
+    # Defaults: Panorama Earthquake's own light colours
+    bpy.types.Scene.pd_light_custom = BoolProperty(
+        name='Custom lighting', default=False,
+        description='Write these light settings into the arena (off: keep the replaced arena\'s lighting)')
+    bpy.types.Scene.pd_sun = bpy.props.PointerProperty(
+        name='Sun', type=bpy.types.Object, poll=_sun_poll,
+        description='A Sun light whose direction the game\'s light uses (empty: keep the arena\'s direction)')
+    bpy.types.Scene.pd_stage_light = _colour('Light', (0.706, 0.686, 0.608),
+                                             'Colour of the sun on the stage, placed objects and effects')
+    bpy.types.Scene.pd_stage_ambient = _colour('Ambient', (0.424, 0.392, 0.373),
+                                               'Light on the stage\'s shaded side')
+    bpy.types.Scene.pd_char_light = _colour('Light', (0.941, 0.922, 0.843), 'Colour of the sun on characters')
+    bpy.types.Scene.pd_char_ambient = _colour('Ambient', (0.314, 0.282, 0.263),
+                                              'Light on characters\' shaded side')
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.TOPBAR_MT_file_import.append(menu_import)
@@ -226,6 +277,8 @@ def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_import)
     for c in reversed(classes):
         bpy.utils.unregister_class(c)
+    for p in ('pd_char_ambient', 'pd_char_light', 'pd_stage_ambient', 'pd_stage_light', 'pd_sun', 'pd_light_custom'):
+        delattr(bpy.types.Scene, p)
     del bpy.types.Scene.pd_imported
     del bpy.types.Scene.pd_scale
     del bpy.types.Scene.pd_base_arena

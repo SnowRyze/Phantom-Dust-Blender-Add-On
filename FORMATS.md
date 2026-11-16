@@ -35,7 +35,9 @@ Section offsets point just past a 4-character tag (e.g. `NM00`).
 | `0x94` | **Collision** (below) |
 | `0x98` | `EF00` (unknown, likely effects) |
 | `0x9C` | `SP00` (unknown) |
-| `0xA0` .. `0xF4` | `MD00`, then the `CP00` spawn layouts and later sections |
+| `0xA0` .. `0xBC` | `MD00`, then the `CP00` spawn layouts |
+| `0xD0 + 4*v` | Lighting script (`mapLight`, below) for variant v; unused variants fall back to `0xD0` |
+| `0xF4` | Light animation block (an `.alr`-style chunk `0x0E` of `0x05` animation chunks) |
 | `0x138` | File size (true in every arena) |
 
 Online, the host picks the layout as `rand() % count` and sends it to the other players.
@@ -276,9 +278,41 @@ one per layout slot) and the effect entries' layout filter byte (an effect shown
 add-on currently writes one variant (placement slot 0, effects for all layouts) and the clean slate drops the
 base arena's kind-20 entry.
 
+## Lighting: the `mapLight` script (header `0xD0`) (confirmed in game)
+
+Loaded by `FUN_140199b00` (it falls back to `maplight%d.ssb` files, which the PC version doesn't ship). A
+compiled SSB script: header (0x20 bytes: header size, function table offset, string pool offset twice, 0,
+`FFFF FFFF`, a u32 that varies per file, 0), 32-bit code words, a function table with one entry (`maplight`,
+two base-40 words, start at word 8) and an empty string pool. The code is only argument pushes and native calls:
+
+| Word | Meaning |
+|---|---|
+| `(v << 16) \| 0x0E` | push the small int v |
+| `(low 16 bits << 16) \| 0x0F`, then the 32 bits | push a float, or a packed `0x00RRGGBB` colour |
+| `(id << 16) \| (count << 8) \| 0x01` | call native `id` with the last `count` pushed values |
+| `0x00000005` | return |
+
+The game keeps four light sets (0x58 bytes each at `0x1403e8a40`). Set 0 lights the stage, placed objects
+and effects; set 1 lights characters; sets 2 and 3 are used while drawing the far models (`FUN_1401c87f0`).
+
+| Call | Arguments |
+|---|---|
+| `2000` | ambient axis (3 floats), light direction (3 floats, the way the light travels: y < 0 = from above), light colour, second colour, ambient colour, set |
+| `2002` | fog: a, b, colour, mode (0 off, 1/2 exponential with density a, 3 linear from b to a), set |
+| `2005` | point light: range, position (3 floats), colour, slot 0-2, set |
+| `2001` | 0, a colour |
+| `2003` | a scale (0.7-1.1 across arenas), 0 |
+
+Confirmed in game: set 0's light and ambient colours tint the stage, objects and effects (multiplying the
+baked vertex colours, with the shaded side getting the ambient colour); set 1's tint characters. **Fog does
+nothing on PC**: the fog render states the script feeds (`0x5C`-`0x60`, `0x8A`) have no case in the PC
+version's render-state setter `FUN_140020660`, and a test with bright fog colours showed none.
+`pdstage/maplight.py` reads and writes the script (every arena's script rebuilds byte-identical);
+`tools/dump_ssb.py` prints it.
+
 ## Not yet known
 
-- The `.alr` writer (needed for custom visuals) and how stage materials pick shaders.
+- How stage materials pick shaders (new meshes use `sd`).
 - What surface types mean, and the `128, 3, 24, 0` / flags values in spawn entries.
-- `OA`/`OC`/`OE` sections, `EF00`, `SP00`, `MD00`, the object table beyond its first 3 fields.
-- `stNNcam.alr` details, `.ssb` stage scripts, lighting.
+- `OA`/`OC`/`OE` sections, `SP00`, `MD00`, the object table beyond its first 3 fields.
+- `stNNcam.alr` details; natives `2001` and `2003` of the lighting script; the light animation block.

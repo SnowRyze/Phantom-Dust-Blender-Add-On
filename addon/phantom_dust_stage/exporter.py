@@ -11,8 +11,12 @@ not authored in Blender, then:
   exactly 3 child empties as orb points. The base arena fixes how many layouts there are and how many spawns
   each has (4 in most arenas). If the scene has fewer layouts they are repeated to fill. Without a Spawn Points
   collection the base arena's spawns are kept.
+- Lighting (Scene Properties > Phantom Dust Lighting, when enabled): the light colours and sun direction for the
+  stage (with objects and effects) and for characters, written into the arena's light script.
 """
 import os
+
+from mathutils import Vector
 
 from ._lib import dat, collision_build
 from . import convert as cv
@@ -207,6 +211,37 @@ def export_scene(context, base_path, out_path, scale, remove_objects=False, obje
         b = bytearray(effects_build.set_effects(bytes(b), keep + entries))
         report.append('%d effects (%s)' % (len(entries), ', '.join('%d %s' % (n, k.lower()) for k, n in counts.items())))
 
+    if getattr(scene, 'pd_light_custom', False):
+        msg = apply_lighting(scene, b)
+        b = bytearray(msg[0])
+        report.append(msg[1])
+
     with open(out_path, 'wb') as f:
         f.write(b)
     return '; '.join(report)
+
+
+def _byte_colour(c):
+    return tuple(int(round(max(0.0, min(1.0, x)) * 255)) for x in c[:3])
+
+
+def apply_lighting(scene, b):
+    """Scene lighting settings -> the arena's light script (light set 0 = stage, objects and effects;
+    set 1 = characters). The direction comes from the scene's Sun (pd_sun), else the base arena's.
+    Returns (new bytes, report text)."""
+    from ._lib import maplight
+    script = maplight.script_of(bytes(b))
+    if script is None:
+        raise ExportError('the base arena has no lighting script')
+    sets = maplight.describe(script)['sets']
+    sun = scene.pd_sun
+    if sun is not None and sun.type == 'LIGHT':
+        d = sun.matrix_world.to_3x3() @ Vector((0.0, 0.0, -1.0))   # the way the light travels
+        d = Vector(cv.to_game(d, 1.0)).normalized()
+        direction, src = tuple(d), 'from %s' % sun.name
+    else:
+        direction, src = None, 'arena direction'
+    for i, (light, amb) in enumerate(((scene.pd_stage_light, scene.pd_stage_ambient),
+                                      (scene.pd_char_light, scene.pd_char_ambient))):
+        maplight.set_light(script, i, direction or sets[i]['direction'], _byte_colour(light), _byte_colour(amb))
+    return maplight.write(bytes(b), script), 'custom lighting (%s)' % src

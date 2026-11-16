@@ -95,12 +95,19 @@ are removed, so only what you made appears.
 Character shadows work on exported stages ("Character shadows" export option, on by default).
 
 Sky and background: child collections `Sky` and `Background` under Visuals, exported with "Replace background
-and sky" (tested in game). They use the simple shader, so a sky doesn't animate like the game's clouds, and the
-replaced arena's distance fog and brightness still apply.
+and sky" (tested in game). They use the simple shader, so a sky doesn't animate like the game's clouds.
+
+**Lighting** (Scene Properties > Phantom Dust Lighting; tick the header to use it): the game lights the stage,
+placed objects and effects with one light, and characters with another (tested in game). Each has a **Light**
+colour and an **Ambient** colour (the shaded side). **Sun**: pick a Sun light and the game's light follows its
+direction (use the sun you baked PD_Light with so the two agree); empty keeps the arena's direction. The game
+multiplies the stage's baked colours by its light, so keep the stage colours near the defaults (Panorama
+Earthquake's) unless you want a tint. Off: the replaced arena's lighting is kept.
+Fog can't be set: the PC version ignores the arenas' fog settings (checked in game and in the code).
 
 Not done yet: shadows cast by the stage itself (e.g. under stairs), normal maps and reflections (new meshes use the
-simple `sd` shader), fog and lighting settings, stage variants (objects and effects that change between matches),
-and adding more layouts than the base arena has.
+simple `sd` shader), stage variants (objects and effects that change between matches), and adding more layouts
+than the base arena has.
 
 **Tests:** `tests/blender_roundtrip.py` runs in Blender without a window: an imported arena exports with
 identical triangles and spawns, a map built from scratch exports exactly its own geometry and spawns, and
