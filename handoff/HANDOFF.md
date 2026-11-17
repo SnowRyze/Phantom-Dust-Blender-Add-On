@@ -135,7 +135,7 @@ folder, then `blender --command extension install-file -r user_default -e <zip>`
 3. Run scripts headless against the analysed program (read-only, no re-analysis):
    ```
    <ghidra>\support\analyzeHeadless.bat <projects_dir> PhantomDust -process PDUWP.exe -noanalysis -readOnly ^
-       -scriptPath <repo>\tools\ghidra -postScript DumpFuncs.java <out.txt> "140199b00+140199970" 1
+       -scriptPath <repo>\handoff\ghidra -postScript DumpFuncs.java <out.txt> "140199b00+140199970" 1
    ```
    The `.bat` launcher splits arguments on commas: scripts use `+` or `~` as list separators.
    Ghidra caches compiled scripts: after editing a script, give it a new file name or it may run the old one.
