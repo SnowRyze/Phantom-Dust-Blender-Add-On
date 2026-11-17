@@ -31,6 +31,8 @@ ROLES = [
                            'Background/Sky replace those, if enabled on export)'),
     ('OBJECTS', 'Objects', 'Props and breakables: each child collection is one object type (preset, debris, '
                            'collider); every mesh directly in it is one placement'),
+    ('EFFECTS', 'Effects', 'Ambient effects: each child collection is one effect type (steam, sparks, smoke); '
+                           'every object directly in it is one placement'),
     ('MISC', 'Misc (planned)', 'Kill height and the like; not exported yet'),
 ]
 

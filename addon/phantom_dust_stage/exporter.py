@@ -140,9 +140,11 @@ def export_models(context, base_alr_path, out_alr_path, scale, background_and_sk
     return '; '.join(report), objects, placements
 
 
-def export_scene(context, base_path, out_path, scale, remove_objects=False, objects=None, placements=None):
+def export_scene(context, base_path, out_path, scale, remove_objects=False, objects=None, placements=None,
+                 game_data=None):
     """Write the .dat. remove_objects = clean slate (no placed objects or effects from the base arena).
-    objects/placements (from export_models) become the stage's objects."""
+    objects/placements (from export_models) become the stage's objects. Effects collections add effects
+    (presets read from game_data)."""
     if not os.path.isfile(base_path):
         raise ExportError('base arena file not found: %s (set the game data folder in the export options)' % base_path)
     if os.path.abspath(out_path) == os.path.abspath(base_path):
@@ -192,6 +194,18 @@ def export_scene(context, base_path, out_path, scale, remove_objects=False, obje
     if objects:
         from ._lib import objects_build
         b = bytearray(objects_build.add_objects(bytes(b), objects, placements))
+
+    eff_cols = collections_with_role(scene, 'EFFECTS')
+    if eff_cols:
+        from . import effects_export
+        from ._lib import effects_build
+        try:
+            entries, counts = effects_export.gather(context, eff_cols, scale, game_data or os.path.dirname(os.path.dirname(base_path)))
+        except effects_export.EffectsError as e:
+            raise ExportError(str(e))
+        keep = [] if remove_objects else [bytes(b[e['offset']:e['offset'] + effects_build.ENTRY]) for e in dat.effects(b)]
+        b = bytearray(effects_build.set_effects(bytes(b), keep + entries))
+        report.append('%d effects (%s)' % (len(entries), ', '.join('%d %s' % (n, k.lower()) for k, n in counts.items())))
 
     with open(out_path, 'wb') as f:
         f.write(b)

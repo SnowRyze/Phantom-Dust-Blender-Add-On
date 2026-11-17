@@ -13,9 +13,11 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 
 from . import convert as cv
 from . import exporter, importer
-from ._lib import objects_build
+from ._lib import effects_build, objects_build
 
 PRESET_ITEMS = [(k, k.replace('_', ' ').title(), v[2]) for k, v in objects_build.PRESETS.items()]
+EFFECT_ITEMS = [(k, v[2], 'Copied from %s, effect %d, in your game files' % (v[0], v[1]))
+                for k, v in effects_build.PRESETS.items()]
 
 ARENA_ITEMS = [(k, '%s (%s)' % (name, k), 'Replace %s' % name) for k, name in cv.ARENAS]
 
@@ -110,7 +112,8 @@ class PDSTAGE_OT_export(bpy.types.Operator, ExportHelper):
             vmsg, objects, placements = exporter.export_models(context, base_alr, out_alr, self.scale,
                                                                self.background_and_sky, self.shadows)
             msg = exporter.export_scene(context, exporter.base_dat_path(game_data, self.base_arena),
-                                        self.filepath, self.scale, self.remove_objects, objects, placements)
+                                        self.filepath, self.scale, self.remove_objects, objects, placements,
+                                        game_data)
             if vmsg:
                 msg += '; ' + vmsg + ' -> ' + os.path.basename(out_alr)
         except exporter.ExportError as e:
@@ -132,6 +135,13 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
         c = context.collection
         lay = self.layout
         parent = next((p for p in bpy.data.collections if c.name in p.children), None)
+        if parent is not None and parent.pd_role == 'EFFECTS':
+            lay.label(text='Effect type (in %s)' % parent.name, icon='SHADERFX')
+            lay.prop(c, 'pd_effect')
+            col = lay.column(align=True)
+            col.label(text='Each object here (empties work well) is one placement:')
+            col.label(text='location, turn about Z, and scale (multiplies the effect size)')
+            return
         if parent is not None and parent.pd_role == 'OBJECTS':
             lay.label(text='Object type (in %s)' % parent.name, icon='OBJECT_DATA')
             lay.prop(c, 'pd_preset')
@@ -159,6 +169,8 @@ class PDSTAGE_PT_collection(bpy.types.Panel):
             lay.label(text='Texture from each material; baked lighting from the PD_Light colour attribute')
         elif c.pd_role == 'OBJECTS':
             lay.label(text='Each child collection is one object type')
+        elif c.pd_role == 'EFFECTS':
+            lay.label(text='Each child collection is one effect type (steam, sparks, smoke)')
         elif c.pd_role == 'MISC':
             lay.label(text='Not exported yet', icon='INFO')
 
@@ -186,6 +198,9 @@ def register():
     bpy.types.Collection.pd_debris_stays = BoolProperty(
         name='Debris stays', default=False,
         description='Leave the debris model lying where the object broke (off: it disappears, like the game\'s boxes)')
+    bpy.types.Collection.pd_effect = EnumProperty(
+        name='Effect', items=EFFECT_ITEMS, default='STEAM',
+        description='Which of the game\'s effects to place (copied from your game files when exporting)')
     bpy.types.Collection.pd_hits = bpy.props.IntProperty(
         name='Hits to break', default=1, min=1, max=255,
         description='How many hits the object takes before it breaks')
@@ -211,6 +226,7 @@ def unregister():
     del bpy.types.Scene.pd_imported
     del bpy.types.Scene.pd_scale
     del bpy.types.Scene.pd_base_arena
+    del bpy.types.Collection.pd_effect
     del bpy.types.Collection.pd_damage
     del bpy.types.Collection.pd_hits
     del bpy.types.Collection.pd_debris_stays

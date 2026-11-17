@@ -278,6 +278,19 @@ model_object('Bench_debris', join_meshes('Bench_debris', [
     lit_box_mesh('bd1', (-1.8, -0.5, 0), (-0.2, 0.5, 0.3), 'ex_bricks'),
     lit_box_mesh('bd2', (0.2, -0.5, 0), (1.8, 0.5, 0.3), 'ex_bricks')]), bench_debris)
 
+# ---------------------------------------------------------------- effects: steam, sparks, smoke
+effects = collection('Effects', role='EFFECTS')
+for name, preset, spots in (('Steam', 'STEAM', [(-5, 5.2, FLOOR_Z), (5, -2.8, FLOOR_Z)]),
+                            ('Sparks', 'SPARKS', [(9.5, 9.5, FLOOR_Z + 2.5)]),
+                            ('Smoke', 'SMOKE', [(-12, -12, FLOOR_Z)])):
+    ec = collection(name, effects)
+    ec.pd_effect = preset
+    for i, loc in enumerate(spots):
+        e = bpy.data.objects.new('%s_%d' % (name, i + 1), None)
+        e.empty_display_type = 'CONE'
+        e.location = loc
+        ec.objects.link(e)
+
 # ---------------------------------------------------------------- bake lighting into PD_Light
 world = bpy.data.worlds.new('World')
 scene.world = world

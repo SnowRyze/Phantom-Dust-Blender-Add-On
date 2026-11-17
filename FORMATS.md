@@ -236,6 +236,35 @@ Read from `FUN_140203720` (object table) and `FUN_140203dc0` (creates placed obj
   - Object table offset slots per state (intact, broken, debris): `[3..5]` animation (`OA` sections, `.alr` 0x05
     chunks; e.g. Spiral Highway's collapsing bridges), `[6..8]` collision (`OC`), `[9..11]` effects (`OE`).
 
+## Effects (`EF00`, header `0x98`) (confirmed in game)
+
+`0x5C`-byte entries: `u8 kind, u8 layout filter (0 = always, else only for layout value - 6), u8 0xFF, u8 0,
+f32 position[3], f32 rotation[3] (radians), f32 scale[3]`, then 13 kind-specific values. Count and byte size
+follow the `EF00` tag (`u16, u16`). The kind picks the effect class through the table at `0x1402dc520`
+(`FUN_1401ef940`):
+
+| Kind | Class | Kind | Class |
+|---|---|---|---|
+| 2, 3, 8 | smoke (`pdvkEbSmoke`) | 13, 10 | effect model (lamps, signs) |
+| 4 | belt smoke | 14, 15 | effect model (other) |
+| 5 | glow | 16, 17 | screen shake |
+| 6, 9 | crash (break burst) | 18, 19 | water drops |
+| 7 | jump point | 20 | stage parameters (`pdvkEbStgParam`, one per arena): the stage's variants, see below |
+| 11, 12 | sound emitter | 21, 22 / 23, 24 | steam / sparks |
+
+Copied into another arena (tested in Panorama Earthquake's slot): **steam** (Sein), **sparks** (Sein) and
+**smoke** work; **glow** (Twilight Lane) draws as a white square and **water drops** (Lost Palace) don't show:
+they need their home arena's textures. Effect models, sound emitters and crash bursts reference arena-specific
+resources (small index values), so they aren't portable either. A new table is written by
+`pdstage/effects_build.py`, appended to the file with header `0x98` repointed.
+
+**Stage variants.** Per the user's knowledge of the game, the stage-parameters effect (kind 20) goes with the
+stage's **variants**: different effects, object positions and so on for the same stage, one of which is picked
+at random when a match starts. In the files this shows up as the per-layout placement tables (`PS00`/`PS01`...,
+one per layout slot) and the effect entries' layout filter byte (an effect shown only in one variant). The
+add-on currently writes one variant (placement slot 0, effects for all layouts) and the clean slate drops the
+base arena's kind-20 entry.
+
 ## Not yet known
 
 - The `.alr` writer (needed for custom visuals) and how stage materials pick shaders.

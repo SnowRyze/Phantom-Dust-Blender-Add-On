@@ -78,6 +78,12 @@ turned about Z only, scale 1). Optional child collections: `Broken` (each mesh i
 For destructible objects, debris speed is decided by the game, not the add-on: it comes from the piece's mass
 (lighter = faster), with a fixed limit, so debris only travels a short way.
 
+**Effects:** an Effects collection holds one child collection per effect type; choose its **Effect** (Steam,
+Sparks, Smoke: the game's own effects that work in any arena, copied from your game files at export). Every
+object directly in it (empties work well) is one placement: location, turn about Z, and scale (multiplies the
+effect's size). Other effect kinds (glow, water drops, sounds, effect models) depend on their own arena and
+aren't offered.
+
 **Clean slate** (export option, on for maps built from scratch): the replaced arena's own objects and effects
 are removed, so only what you made appears.
 
