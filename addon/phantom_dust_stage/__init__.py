@@ -46,10 +46,13 @@ class PDSTAGE_OT_import(bpy.types.Operator, ImportHelper):
     scale: FloatProperty(name='Scale', description='Blender units per game unit', default=cv.DEFAULT_SCALE, min=0.0001)
     collision: BoolProperty(name='Collision', default=True)
     spawns: BoolProperty(name='Spawns and orbs', default=True)
+    visuals: BoolProperty(name='Visible model', default=True,
+                          description='Stage, background and sky from stNN.alr, with textures (reference only)')
 
     def execute(self, context):
         try:
-            _root, msg = importer.import_stage(context, self.filepath, self.scale, self.collision, self.spawns)
+            _root, msg = importer.import_stage(context, self.filepath, self.scale, self.collision, self.spawns,
+                                               self.visuals)
         except Exception as e:
             self.report({'ERROR'}, 'Import failed: %s' % e)
             return {'CANCELLED'}

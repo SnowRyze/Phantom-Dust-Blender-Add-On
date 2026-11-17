@@ -152,6 +152,20 @@ ending at type 0. In `stNN.alr`, root 0 is the main stage mesh (type 2 meshes, t
 entries from record offset +16). Many roots are empty placeholders, and type 19 records are all zero.
 No spawn or orb data was found in the `.alr`.
 
+### Reading models and textures (confirmed by import)
+
+Following the Phantom Dust wiki ALR page and Esper-RE `alr.h`, checked on st04 (`pdstage/alr.py`):
+- Header: resource buffer offset at `0x0C` and size at `0x14` add up to the file size; the buffer starts on a
+  `0x1000` boundary. Version is `0x52` in the 2017 release.
+- `0x15` texture table: names decode with the base-40 text encoding (`st04_c_kabe3`, `st04_n_...`); sizes match
+  format and mip count for 63 of 64 entries. st04 uses BC1, BC3 and uncompressed BGRA (`0x86`).
+  **Texture data is linear** in the 2017 release (not Xbox-swizzled).
+- `0x02` meshes: index data starts at `+0x68`; every index is within its `0x16` vertex buffer. Primitive 5 =
+  triangle list, 6 = strip. Node transforms (`0x03`) composed as T * Rz * Ry * Rx * S, then parents.
+- Imported into Blender, the stage, background and sky render correctly textured and line up with the
+  collision and spawns. Compared with the game, the orientation is correct (not mirrored) with
+  Blender = (x, -z, y) x scale.
+
 ## Not yet known
 
 - The `.alr` writer (needed for custom visuals) and how stage materials pick shaders.

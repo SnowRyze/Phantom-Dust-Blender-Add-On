@@ -27,11 +27,19 @@ def _collection(name, parent, role='NONE', surface=''):
     return c
 
 
-def import_stage(context, path, scale=cv.DEFAULT_SCALE, collision=True, spawns=True):
+def import_stage(context, path, scale=cv.DEFAULT_SCALE, collision=True, spawns=True, visuals=True):
     b = open(path, 'rb').read()
     stage = os.path.splitext(os.path.basename(path))[0]
     root = _collection('PD_' + stage, context.scene.collection)
     report = []
+
+    alr_path = os.path.splitext(path)[0] + '.alr'
+    if visuals:
+        if os.path.isfile(alr_path):
+            from . import visuals as vis
+            report.append(vis.import_visuals(context, alr_path, root, scale))
+        else:
+            report.append('no %s next to the .dat: visible model skipped' % os.path.basename(alr_path))
 
     if collision:
         cols = _collection('Colliders', root, 'COLLIDERS')

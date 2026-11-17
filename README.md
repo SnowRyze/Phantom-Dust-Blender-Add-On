@@ -10,7 +10,7 @@ itself is not written yet. See [FORMATS.md](FORMATS.md) for what is decoded and 
 | Spawns and orbs (`stNN.dat`, `CP00`) | Decoded, confirmed in game |
 | Collision (`stNN.dat`) | Decoded; writer confirmed in game |
 | AI navigation (`comdataN.cad`) | On hold (custom arenas aren't expected to need bots) |
-| Visual stage (`stNN.alr`) | Readable; writing not done |
+| Visual stage (`stNN.alr`) | Imports into Blender with textures (stage, background, sky); writing not done |
 | Blender add-on (Blender 5.3) | Import/export of spawns, orbs and collision; confirmed in game |
 
 ## Requirements
@@ -61,7 +61,9 @@ Without a Colliders or Spawn Points collection its collision or spawns are kept.
 of 4 spawns; make 1 or more layouts of 4 and they are repeated to fill the slots.
 
 **Starting from an existing arena (optional):** File > Import > Phantom Dust Stage (.dat) loads an arena's
-collision and spawns into tagged collections, and sets the export to go back to the same slot.
+collision and spawns into tagged collections, and sets the export to go back to the same slot. With
+**Visible model** on, it also loads `stNN.alr` from the same folder: the stage, background and sky with their
+textures, lined up with the collision, as a reference (it is not exported yet).
 
 Not exported yet: the visible model and textures (needs the `.alr` writer), cameras, kill height, skybox,
 breakables, and adding more layouts than the base arena has.
