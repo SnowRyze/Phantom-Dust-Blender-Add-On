@@ -115,7 +115,7 @@ slate is off for imported arenas so their objects stay.
 ## For developers
 
 See [FORMATS.md](FORMATS.md) for every decoded format and how it was confirmed in game. The readers and writers
-are plain Python in `pdstage/` (no Blender needed).
+are plain Python in `addon/phantom_dust_stage/pdstage/` (no Blender needed; `import pdstage` works from the repository root).
 
 ```
 python tools/dump_dat.py      Map/st04.dat --spawns       header, layouts, spawns, collision summary

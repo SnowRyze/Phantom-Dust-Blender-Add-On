@@ -1,8 +1,6 @@
-"""Readers for Phantom Dust (2017 UWP release) stage files.
+"""The readers/writers live inside the add-on (addon/phantom_dust_stage/pdstage), so every way of installing
+it, including GitHub's source-code zip, carries them. This package points there, so tools and tests can keep
+using `from pdstage import dat` from the repository root."""
+import os
 
-alr  - .alr containers (stage visuals): header and record chains
-dat  - stNN.dat: header, spawn/orb layouts (CP00), collision
-cad  - com/stNN/comdata.cad: AI navigation mesh
-
-See FORMATS.md for the layouts and how each was confirmed.
-"""
+__path__ = [os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'addon', 'phantom_dust_stage', 'pdstage')]

@@ -307,7 +307,7 @@ Confirmed in game: set 0's light and ambient colours tint the stage, objects and
 baked vertex colours, with the shaded side getting the ambient colour); set 1's tint characters. **Fog does
 nothing on PC**: the fog render states the script feeds (`0x5C`-`0x60`, `0x8A`) have no case in the PC
 version's render-state setter `FUN_140020660`, and a test with bright fog colours showed none.
-`pdstage/maplight.py` reads and writes the script (every arena's script rebuilds byte-identical);
+`addon/phantom_dust_stage/pdstage/maplight.py` reads and writes the script (every arena's script rebuilds byte-identical);
 `tools/dump_ssb.py` prints it.
 
 ## Not yet known

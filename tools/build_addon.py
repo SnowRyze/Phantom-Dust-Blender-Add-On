@@ -3,7 +3,7 @@
   python tools/build_addon.py
 
 Install in Blender: Edit > Preferences > Get Extensions > (menu) Install from Disk.
-The zip holds the add-on files at its root plus a bundled copy of pdstage/.
+The zip holds the add-on folder's files at its root (pdstage/ is inside it).
 """
 import os, re, sys, zipfile
 
@@ -27,7 +27,6 @@ def add_tree(z, src, prefix):
 
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
     add_tree(z, addon, '')
-    add_tree(z, os.path.join(root, 'pdstage'), 'pdstage')
 print('wrote', out)
 for n in zipfile.ZipFile(out).namelist():
     print('  ', n)
